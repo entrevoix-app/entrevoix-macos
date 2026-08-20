@@ -88,6 +88,7 @@ struct SettingsLibraryRow: View {
                     .foregroundStyle(.tint)
                     .frame(width: 16)
             }
+            .labelStyle(SettingsLibraryRowLabelStyle())
 
             Spacer(minLength: 12)
             statusView
@@ -114,6 +115,15 @@ struct SettingsLibraryRow: View {
                 .foregroundStyle(.orange)
         case nil:
             EmptyView()
+        }
+    }
+}
+
+private struct SettingsLibraryRowLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 12) {
+            configuration.icon
+            configuration.title
         }
     }
 }
