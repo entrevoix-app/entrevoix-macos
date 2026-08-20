@@ -336,46 +336,25 @@ struct DictationDictionaryView: View {
     var body: some View {
         let locale = model.interfaceLocale
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: 12) {
-                Text(EntrevoixLocalization.text("settings.dictation_dictionary", defaultValue: "Dictation Dictionary", locale: locale))
-                    .font(.title2.weight(.semibold))
-                Spacer()
-                TextField(
-                    EntrevoixLocalization.text("dictation_dictionary.search", defaultValue: "Search…", locale: locale),
-                    text: $searchText
-                )
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 180)
-                Button {
+            SettingsLibraryHeader(
+                title: EntrevoixLocalization.text("settings.dictation_dictionary", defaultValue: "Dictation Dictionary", locale: locale),
+                description: EntrevoixLocalization.text(
+                    "dictation_dictionary.description",
+                    defaultValue: "Add names, acronyms, or technical terms that should be recognized by dictation.",
+                    locale: locale
+                ),
+                count: EntrevoixLocalization.dictationDictionaryCount(model.preferences.dictationDictionary.count, locale: locale),
+                searchPlaceholder: EntrevoixLocalization.text("dictation_dictionary.search", defaultValue: "Search…", locale: locale),
+                addAccessibilityLabel: EntrevoixLocalization.text("dictation_dictionary.add", defaultValue: "Add term", locale: locale),
+                isAddDisabled: isAdding,
+                searchText: $searchText
+            ) {
                     guard !isAdding else { return }
                     newTerm = ""
                     addError = false
                     isAdding = true
                     newTermIsFocused = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .buttonStyle(.bordered)
-                .help(EntrevoixLocalization.text("dictation_dictionary.add", defaultValue: "Add term", locale: locale))
-                .disabled(isAdding)
             }
-            .padding(.bottom, 6)
-
-            HStack {
-                Text(EntrevoixLocalization.text(
-                    "dictation_dictionary.description",
-                    defaultValue: "Add names, acronyms, or technical terms that should be recognized by dictation.",
-                    locale: locale
-                ))
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                Spacer()
-                Text(EntrevoixLocalization.dictationDictionaryCount(model.preferences.dictationDictionary.count, locale: locale))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.bottom, 16)
-
             Label {
                 Text(EntrevoixLocalization.text(
                     "dictation_dictionary.warning",
@@ -388,21 +367,17 @@ struct DictationDictionaryView: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
+            .padding(.horizontal)
             .padding(.bottom, 12)
-
-            HStack {
-                Text(EntrevoixLocalization.text("dictation_dictionary.column", defaultValue: "Dictionary String", locale: locale))
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
-            .padding(.horizontal, 10)
-            .padding(.bottom, 4)
 
             List {
                 if isAdding {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "textformat.abc")
+                            .foregroundStyle(.tint)
+                            .frame(width: 16)
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 8) {
                             TextField(
                                 EntrevoixLocalization.text("dictation_dictionary.entry_placeholder", defaultValue: "Term", locale: locale),
                                 text: $newTerm
@@ -419,39 +394,47 @@ struct DictationDictionaryView: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(EntrevoixLocalization.text("dictation_dictionary.cancel", defaultValue: "Cancel", locale: locale))
-                        }
-                        if addError {
-                            Text(EntrevoixLocalization.text(
-                                "dictation_dictionary.invalid_entry",
-                                defaultValue: "Enter a non-empty term that is not already in the dictionary.",
-                                locale: locale
-                            ))
-                            .font(.caption)
-                            .foregroundStyle(.orange)
+                            }
+                            if addError {
+                                Text(EntrevoixLocalization.text(
+                                    "dictation_dictionary.invalid_entry",
+                                    defaultValue: "Enter a non-empty term that is not already in the dictionary.",
+                                    locale: locale
+                                ))
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                            }
                         }
                     }
                     .listRowBackground(Color(nsColor: .controlBackgroundColor))
                 }
 
-                ForEach(filteredTerms, id: \.self) { term in
-                    HStack(spacing: 8) {
-                        Text(term)
+                if filteredTerms.isEmpty, !isAdding {
+                    ContentUnavailableView(
+                        searchText.isEmpty
+                            ? EntrevoixLocalization.text("dictation_dictionary.none", defaultValue: "No terms saved", locale: locale)
+                            : EntrevoixLocalization.text("library.no_results", defaultValue: "No matching items", locale: locale),
+                        systemImage: "textformat.abc"
+                    )
+                } else {
+                    ForEach(filteredTerms, id: \.self) { term in
+                        SettingsLibraryRow(title: term, systemImage: "textformat.abc")
                             .textSelection(.enabled)
-                        Spacer()
-                        Button {
-                            model.removeDictationDictionaryTerm(term)
-                        } label: {
-                            Image(systemName: "trash")
-                                .foregroundStyle(.red)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(EntrevoixLocalization.text("dictation_dictionary.remove", defaultValue: "Remove term", locale: locale))
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    model.removeDictationDictionaryTerm(term)
+                                } label: {
+                                    Label(
+                                        EntrevoixLocalization.text("dictation_dictionary.remove", defaultValue: "Remove term", locale: locale),
+                                        systemImage: "trash"
+                                    )
+                                }
+                            }
                     }
                 }
             }
             .listStyle(.inset)
         }
-        .padding()
         .onChange(of: isAdding) { _, adding in
             if adding { newTermIsFocused = true }
         }
@@ -661,27 +644,60 @@ struct PromptLibraryView: View {
 private struct PromptListPage: View {
     @Bindable var model: AppStore
     @Bindable var state: PromptLibraryNavigationState
+    @State private var searchText = ""
+
+    private var filteredPrompts: [CleanupPrompt] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return model.preferences.cleanupPrompts }
+        return model.preferences.cleanupPrompts.filter {
+            $0.name.localizedCaseInsensitiveContains(query)
+                || $0.instructions.localizedCaseInsensitiveContains(query)
+        }
+    }
 
     var body: some View {
         let locale = model.interfaceLocale
-        List {
-            Section {
-                if model.preferences.cleanupPrompts.isEmpty {
+        VStack(spacing: 0) {
+            SettingsLibraryHeader(
+                title: EntrevoixLocalization.text("settings.prompts", defaultValue: "Prompts", locale: locale),
+                description: EntrevoixLocalization.text(
+                    "prompts.description",
+                    defaultValue: "Create reusable instructions to refine your dictations.",
+                    locale: locale
+                ),
+                count: EntrevoixLocalization.promptCount(model.preferences.cleanupPrompts.count, locale: locale),
+                searchPlaceholder: EntrevoixLocalization.text("library.search", defaultValue: "Search…", locale: locale),
+                addAccessibilityLabel: EntrevoixLocalization.text("prompts.add", defaultValue: "Add", locale: locale),
+                isAddDisabled: state.isDirty,
+                searchText: $searchText
+            ) {
+                let id = UUID()
+                state.beginCreating(id)
+                state.path.append(.create(id))
+            }
+
+            List {
+                if filteredPrompts.isEmpty {
                     ContentUnavailableView(
-                        EntrevoixLocalization.text("prompts.none", defaultValue: "No prompts saved", locale: locale),
+                        searchText.isEmpty
+                            ? EntrevoixLocalization.text("prompts.none", defaultValue: "No prompts saved", locale: locale)
+                            : EntrevoixLocalization.text("library.no_results", defaultValue: "No matching items", locale: locale),
                         systemImage: "text.badge.checkmark"
                     )
                 } else {
-                    ForEach(model.preferences.cleanupPrompts) { prompt in
+                    ForEach(filteredPrompts) { prompt in
                         Button {
                             state.openPrompt(prompt.id)
                         } label: {
-                            HStack {
-                                Label(prompt.name, systemImage: prompt.systemImageName)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .foregroundStyle(.tertiary)
-                            }
+                            SettingsLibraryRow(
+                                title: prompt.name,
+                                systemImage: prompt.systemImageName,
+                                detail: prompt.instructions,
+                                status: model.promptLibrary.activeSelection == .prompt(prompt.id)
+                                    ? .active(EntrevoixLocalization.text("library.active", defaultValue: "Active", locale: locale))
+                                    : nil,
+                                showsDisclosure: true
+                            )
                         }
                         .buttonStyle(.plain)
                         .contentShape(Rectangle())
@@ -701,22 +717,9 @@ private struct PromptListPage: View {
                 }
                 .disabled(state.isDirty)
             }
+            .listStyle(.inset)
         }
-        .listStyle(.inset)
-        .navigationTitle(EntrevoixLocalization.text("settings.prompts", defaultValue: "Prompts", locale: locale))
         .navigationBarBackButtonHidden(true)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    let id = UUID()
-                    state.beginCreating(id)
-                    state.path.append(.create(id))
-                } label: {
-                    Label(EntrevoixLocalization.text("prompts.add", defaultValue: "Add", locale: locale), systemImage: "plus")
-                }
-                .disabled(state.isDirty)
-            }
-        }
         .alert(EntrevoixLocalization.text("prompts.reset_title", defaultValue: "Reset prompt list?", locale: locale), isPresented: $state.showResetConfirmation) {
             Button(EntrevoixLocalization.text("prompts.reset", defaultValue: "Reset List", locale: locale), role: .destructive) {
                 model.resetPromptLibrary()

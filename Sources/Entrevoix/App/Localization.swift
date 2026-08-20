@@ -102,6 +102,23 @@ enum EntrevoixLocalization {
         return String(format: format, locale: locale, arguments: [count])
     }
 
+    static func promptCount(_ count: Int, locale: Locale) -> String {
+        localizedCount(count, key: "prompts.count", defaultValue: "%lld prompts", locale: locale)
+    }
+
+    static func workflowCount(_ count: Int, locale: Locale) -> String {
+        localizedCount(count, key: "workflows.count", defaultValue: "%lld workflows", locale: locale)
+    }
+
+    static func workflowStepCount(_ count: Int, locale: Locale) -> String {
+        localizedCount(count, key: "workflows.step_count", defaultValue: "%lld steps", locale: locale)
+    }
+
+    private static func localizedCount(_ value: Int, key: String, defaultValue: String, locale: Locale) -> String {
+        let format = text(key, defaultValue: defaultValue, locale: locale)
+        return String(format: format, locale: locale, arguments: [value])
+    }
+
     static func onboardingStep(_ step: Int, total: Int, locale: Locale) -> String {
         let format = text("onboarding.step", defaultValue: "Step %lld of %lld", locale: locale)
         return String(format: format, locale: locale, arguments: [step, total])

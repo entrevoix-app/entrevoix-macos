@@ -94,51 +94,76 @@ struct WorkflowLibraryView: View {
 private struct WorkflowListPage: View {
     @Bindable var model: AppStore
     @Bindable var navigation: WorkflowLibraryNavigationState
+    @State private var searchText = ""
+
+    private var filteredWorkflows: [CleanupWorkflow] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return model.preferences.cleanupWorkflows }
+        return model.preferences.cleanupWorkflows.filter {
+            $0.name.localizedCaseInsensitiveContains(query)
+        }
+    }
 
     var body: some View {
         let locale = model.interfaceLocale
-        List {
-            if model.preferences.cleanupWorkflows.isEmpty {
+        VStack(spacing: 0) {
+            SettingsLibraryHeader(
+                title: EntrevoixLocalization.text("settings.workflows", defaultValue: "Workflows", locale: locale),
+                description: EntrevoixLocalization.text(
+                    "workflows.description",
+                    defaultValue: "Combine prompts into a sequence for more elaborate cleanups.",
+                    locale: locale
+                ),
+                count: EntrevoixLocalization.workflowCount(model.preferences.cleanupWorkflows.count, locale: locale),
+                searchPlaceholder: EntrevoixLocalization.text("library.search", defaultValue: "Search…", locale: locale),
+                addAccessibilityLabel: EntrevoixLocalization.text("workflows.add", defaultValue: "Add", locale: locale),
+                isAddDisabled: false,
+                searchText: $searchText
+            ) {
+                let id = UUID()
+                navigation.beginCreating(id)
+                navigation.path.append(.create(id))
+            }
+
+            List {
+                if filteredWorkflows.isEmpty {
                 ContentUnavailableView(
-                    EntrevoixLocalization.text("workflows.none", defaultValue: "No workflows saved", locale: locale),
+                    searchText.isEmpty
+                        ? EntrevoixLocalization.text("workflows.none", defaultValue: "No workflows saved", locale: locale)
+                        : EntrevoixLocalization.text("library.no_results", defaultValue: "No matching items", locale: locale),
                     systemImage: "point.3.connected.trianglepath.dotted"
                 )
             } else {
-                ForEach(model.preferences.cleanupWorkflows) { workflow in
+                ForEach(filteredWorkflows) { workflow in
                     Button {
                         navigation.beginEditing(workflow.id, model: model)
                         navigation.path.append(.edit(workflow.id, token: UUID()))
                     } label: {
-                        HStack {
-                            Text(workflow.name)
-                            Spacer()
-                            if !workflow.isValid {
-                                Image(systemName: "exclamationmark.triangle")
-                                    .foregroundStyle(.orange)
-                                    .accessibilityLabel(EntrevoixLocalization.text("workflows.empty_warning", defaultValue: "Workflow needs at least one prompt", locale: locale))
-                            }
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(.tertiary)
-                        }
+                        SettingsLibraryRow(
+                            title: workflow.name,
+                            systemImage: "point.3.connected.trianglepath.dotted",
+                            detail: EntrevoixLocalization.workflowStepCount(workflow.promptIDs.count, locale: locale),
+                            status: workflowStatus(for: workflow, locale: locale),
+                            showsDisclosure: true
+                        )
                     }
                     .buttonStyle(.plain)
                     .contentShape(Rectangle())
                 }
             }
-        }
-        .listStyle(.inset)
-        .navigationTitle(EntrevoixLocalization.text("settings.workflows", defaultValue: "Workflows", locale: locale))
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    let id = UUID()
-                    navigation.beginCreating(id)
-                    navigation.path.append(.create(id))
-                } label: {
-                    Label(EntrevoixLocalization.text("workflows.add", defaultValue: "Add", locale: locale), systemImage: "plus")
-                }
             }
+            .listStyle(.inset)
         }
+    }
+
+    private func workflowStatus(for workflow: CleanupWorkflow, locale: Locale) -> SettingsLibraryRowStatus? {
+        if !workflow.isValid {
+            return .warning(EntrevoixLocalization.text("workflows.needs_prompt", defaultValue: "Needs a prompt", locale: locale))
+        }
+        if model.promptLibrary.activeSelection == .workflow(workflow.id) {
+            return .active(EntrevoixLocalization.text("library.active", defaultValue: "Active", locale: locale))
+        }
+        return nil
     }
 }
 
