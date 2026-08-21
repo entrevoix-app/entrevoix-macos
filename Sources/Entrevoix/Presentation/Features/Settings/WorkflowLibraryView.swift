@@ -281,7 +281,7 @@ private struct WorkflowEditor: View {
                     .listRowBackground(
                         WorkflowStepRowBackground(
                             showsConnectionFromPreviousStep: index > 0,
-                            showsConnectionToNextStep: index < steps.count - 1
+                            showsConnectionToNextStep: true
                         )
                     )
                     .listRowInsets(EdgeInsets())
@@ -304,8 +304,13 @@ private struct WorkflowEditor: View {
                 )
                 .help(EntrevoixLocalization.text("workflows.add_prompt", defaultValue: "Add Prompt", locale: locale))
                 .padding(.leading, WorkflowStepCardLayout.cardPadding)
+                .padding(.top, WorkflowStepCardLayout.addButtonTopSpacing)
                 .disabled(prompts.isEmpty)
-                .listRowBackground(Color.clear)
+                .listRowBackground(
+                    WorkflowPromptAddRowBackground(
+                        showsConnectionFromPreviousStep: !steps.isEmpty
+                    )
+                )
                 .listRowInsets(EdgeInsets())
                 .listRowSeparator(.hidden)
             }
@@ -454,6 +459,7 @@ private enum WorkflowStepCardLayout {
     static let iconTileSize: CGFloat = 32
     static let connectorWidth: CGFloat = 2
     static let connectorSegmentHeight: CGFloat = 4
+    static let addButtonTopSpacing: CGFloat = 4
 
     static var connectorLeadingOffset: CGFloat {
         listInset + cardPadding + (iconTileSize - connectorWidth) / 2
@@ -484,13 +490,31 @@ private struct WorkflowStepRowBackground: View {
 }
 
 private struct WorkflowStepConnection: View {
+    var height = WorkflowStepCardLayout.connectorSegmentHeight
+
     var body: some View {
         Rectangle()
             .fill(Color(nsColor: .separatorColor))
             .frame(
                 width: WorkflowStepCardLayout.connectorWidth,
-                height: WorkflowStepCardLayout.connectorSegmentHeight
+                height: height
             )
+    }
+}
+
+private struct WorkflowPromptAddRowBackground: View {
+    let showsConnectionFromPreviousStep: Bool
+
+    var body: some View {
+        Color.clear
+            .overlay(alignment: .topLeading) {
+                if showsConnectionFromPreviousStep {
+                    WorkflowStepConnection(height: WorkflowStepCardLayout.addButtonTopSpacing)
+                        .offset(x: WorkflowStepCardLayout.connectorLeadingOffset)
+                }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
