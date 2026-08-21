@@ -14,6 +14,7 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .navigationSplitViewStyle(.balanced)
+        .navigationTitle((selection ?? .general).title(locale: model.interfaceLocale))
         .frame(minWidth: 760, idealWidth: 920, minHeight: 520, idealHeight: 700)
     }
 
