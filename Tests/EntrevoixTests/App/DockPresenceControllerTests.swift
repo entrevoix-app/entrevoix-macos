@@ -51,6 +51,27 @@ final class DockPresenceControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testFocusingARegisteredSceneRequestsItsWindowFocus() {
+        var activationRequests = 0
+        var focusedWindows: [ObjectIdentifier] = []
+        let controller = DockPresenceController(
+            setActivationPolicy: { _ in true },
+            requestActivation: {
+                activationRequests += 1
+            },
+            requestWindowFocus: { focusedWindows.append($0) }
+        )
+        let settingsWindow = NSObject()
+        let windowID = ObjectIdentifier(settingsWindow)
+
+        controller.register(windowID: windowID, sceneID: "settings")
+        controller.focusUserFacingWindow(id: "settings")
+
+        XCTAssertEqual(activationRequests, 1)
+        XCTAssertEqual(focusedWindows, [windowID])
+    }
+
+    @MainActor
     func testShowsDockForFirstWindowAndHidesItAfterLastWindowCloses() {
         var policies: [NSApplication.ActivationPolicy] = []
         let controller = DockPresenceController { policy in
