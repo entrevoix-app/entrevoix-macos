@@ -241,8 +241,19 @@ private struct WorkflowEditor: View {
 
     var body: some View {
         List {
-            Section(EntrevoixLocalization.text("workflows.details", defaultValue: "Workflow details", locale: locale)) {
-                TextField(EntrevoixLocalization.text("field.name", defaultValue: "Name", locale: locale), text: $draft.name)
+            Section {
+                WorkflowNameField(
+                    label: EntrevoixLocalization.text(
+                        "workflows.name",
+                        defaultValue: "Workflow name",
+                        locale: locale
+                    ),
+                    name: $draft.name
+                )
+                .padding(.vertical, 4)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
             }
             Section(EntrevoixLocalization.text("workflows.prompts", defaultValue: "Prompts", locale: locale)) {
                 if steps.isEmpty {
@@ -342,25 +353,24 @@ private struct WorkflowPromptPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        List(prompts) { prompt in
-            Button {
-                onAdd(prompt.id)
-                dismiss()
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(prompt.name)
-                        .foregroundStyle(.primary)
-                    Text(prompt.instructions)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+        List {
+            ForEach(prompts) { prompt in
+                Button {
+                    onAdd(prompt.id)
+                    dismiss()
+                } label: {
+                    WorkflowPromptPickerCard(prompt: prompt)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .padding(.vertical, 4)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
             }
-            .buttonStyle(.plain)
         }
+        .listStyle(.inset)
+        .contentMargins(.horizontal, SettingsLayout.pageInset, for: .scrollContent)
+        .contentMargins(.vertical, SettingsLayout.pageInset, for: .scrollContent)
         .navigationTitle(
             EntrevoixLocalization.text(
                 "workflows.add_prompt",
@@ -376,6 +386,65 @@ private struct WorkflowPromptPickerSheet: View {
             }
         }
         .frame(minWidth: 360, minHeight: 300)
+    }
+}
+
+private struct WorkflowPromptPickerCard: View {
+    let prompt: CleanupPrompt
+
+    private var preview: String {
+        prompt.instructions
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            WorkflowStepIconTile(systemImage: prompt.systemImageName)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(prompt.name)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                if !preview.isEmpty {
+                    Text(preview)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(WorkflowStepCardLayout.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Color(nsColor: .quaternaryLabelColor).opacity(0.3),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+private struct WorkflowNameField: View {
+    let label: String
+    @Binding var name: String
+
+    var body: some View {
+        LabeledContent(label) {
+            TextField("", text: $name)
+                .textFieldStyle(.plain)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .accessibilityLabel(label)
+        }
+        .padding(WorkflowStepCardLayout.cardPadding)
+        .background(
+            Color(nsColor: .quaternaryLabelColor).opacity(0.3),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
     }
 }
 

@@ -647,6 +647,7 @@
     "workflows.missing_prompt" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Deleted prompt" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Prompt supprimé" } } } },
     "workflows.new_title" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "New Workflow" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Nouveau workflow" } } } },
     "workflows.needs_prompt" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Needs a prompt" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Ajoutez un prompt" } } } },
+    "workflows.name" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Workflow name" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Nom du workflow" } } } },
     "workflows.none" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "No workflows saved" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Aucun workflow enregistré" } } } },
     "workflows.prompts" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Prompts" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Prompts" } } } },
     "workflows.remove_prompt" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove Prompt" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Retirer le prompt" } } } },
