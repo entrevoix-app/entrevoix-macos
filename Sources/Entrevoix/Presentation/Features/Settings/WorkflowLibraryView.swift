@@ -266,19 +266,12 @@ private struct WorkflowEditor: View {
                         onRemove: { onRemove(step.id) }
                     )
                     .padding(.vertical, 4)
-                    .overlay(alignment: .topLeading) {
-                        if index > 0 {
-                            WorkflowStepConnection()
-                                .offset(x: 27)
-                        }
-                    }
-                    .overlay(alignment: .bottomLeading) {
-                        if index < steps.count - 1 {
-                            WorkflowStepConnection()
-                                .offset(x: 27)
-                        }
-                    }
-                    .listRowBackground(Color.clear)
+                    .listRowBackground(
+                        WorkflowStepRowBackground(
+                            showsConnectionFromPreviousStep: index > 0,
+                            showsConnectionToNextStep: index < steps.count - 1
+                        )
+                    )
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
                 }
@@ -323,6 +316,52 @@ private struct WorkflowEditor: View {
     }
 }
 
+private enum WorkflowStepCardLayout {
+    static let listInset: CGFloat = 16
+    static let cardPadding: CGFloat = 12
+    static let iconTileSize: CGFloat = 32
+    static let connectorWidth: CGFloat = 2
+    static let connectorSegmentHeight: CGFloat = 4
+
+    static var connectorLeadingOffset: CGFloat {
+        listInset + cardPadding + (iconTileSize - connectorWidth) / 2
+    }
+}
+
+private struct WorkflowStepRowBackground: View {
+    let showsConnectionFromPreviousStep: Bool
+    let showsConnectionToNextStep: Bool
+
+    var body: some View {
+        Color.clear
+            .overlay(alignment: .topLeading) {
+                if showsConnectionFromPreviousStep {
+                    WorkflowStepConnection()
+                        .offset(x: WorkflowStepCardLayout.connectorLeadingOffset)
+                }
+            }
+            .overlay(alignment: .bottomLeading) {
+                if showsConnectionToNextStep {
+                    WorkflowStepConnection()
+                        .offset(x: WorkflowStepCardLayout.connectorLeadingOffset)
+                }
+            }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct WorkflowStepConnection: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color(nsColor: .separatorColor))
+            .frame(
+                width: WorkflowStepCardLayout.connectorWidth,
+                height: WorkflowStepCardLayout.connectorSegmentHeight
+            )
+    }
+}
+
 private struct WorkflowStepCard: View {
     let title: String
     let preview: String?
@@ -338,7 +377,10 @@ private struct WorkflowStepCard: View {
             Image(systemName: systemImage)
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(Color.accentColor)
-                .frame(width: 32, height: 32)
+                .frame(
+                    width: WorkflowStepCardLayout.iconTileSize,
+                    height: WorkflowStepCardLayout.iconTileSize
+                )
                 .background(Color.accentColor.opacity(0.14), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
@@ -374,7 +416,7 @@ private struct WorkflowStepCard: View {
             .accessibilityLabel(removeAccessibilityLabel)
             .help(removeAccessibilityLabel)
         }
-        .padding(12)
+        .padding(WorkflowStepCardLayout.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             Color(nsColor: .quaternaryLabelColor).opacity(0.3),
@@ -382,16 +424,6 @@ private struct WorkflowStepCard: View {
         )
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onHover { isHovering = $0 }
-    }
-}
-
-private struct WorkflowStepConnection: View {
-    var body: some View {
-        Rectangle()
-            .fill(Color(nsColor: .separatorColor))
-            .frame(width: 2, height: 4)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
     }
 }
 
