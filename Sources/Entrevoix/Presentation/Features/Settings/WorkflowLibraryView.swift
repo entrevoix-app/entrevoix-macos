@@ -114,7 +114,6 @@ private struct WorkflowListPage: View {
                     defaultValue: "Combine prompts into a sequence for more elaborate cleanups.",
                     locale: locale
                 ),
-                count: EntrevoixLocalization.workflowCount(model.preferences.cleanupWorkflows.count, locale: locale),
                 systemImage: "point.3.connected.trianglepath.dotted"
             )
 

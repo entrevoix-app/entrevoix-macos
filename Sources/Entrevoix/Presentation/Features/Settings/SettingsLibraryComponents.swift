@@ -3,31 +3,37 @@ import SwiftUI
 struct SettingsLibraryHeader: View {
     let title: String
     let description: String
-    let count: String
     let systemImage: String
 
     var body: some View {
-        VStack(spacing: SettingsLayout.gridSpacing) {
+        VStack(spacing: SettingsLayout.pageInset) {
             Image(systemName: systemImage)
                 .font(.title2.weight(.medium))
+                .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.tint)
-                .frame(width: 48, height: 48)
-                .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            Text(title)
-                .font(.title2.weight(.semibold))
-            Text(description)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Text(count)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .frame(width: SettingsLayout.iconTileSize, height: SettingsLayout.iconTileSize)
+                .background(
+                    Color.accentColor.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: SettingsLayout.cardCornerRadius, style: .continuous)
+                )
+
+            VStack(spacing: 4) {
+                Text(title)
+                    .font(.title2.weight(.bold))
+                Text(description)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, SettingsLayout.pageInset)
         .padding(.vertical, SettingsLayout.pageInset)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .padding(.vertical, SettingsLayout.pageInset)
+        .background(
+            Color.primary.opacity(0.04),
+            in: RoundedRectangle(cornerRadius: SettingsLayout.cardCornerRadius, style: .continuous)
+        )
+        .padding(.bottom, SettingsLayout.sectionSpacing)
         .listRowInsets(EdgeInsets())
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)

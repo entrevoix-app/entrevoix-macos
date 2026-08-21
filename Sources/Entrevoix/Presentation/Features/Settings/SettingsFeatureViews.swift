@@ -342,7 +342,6 @@ struct DictationDictionaryView: View {
                     defaultValue: "Add names, acronyms, or technical terms that should be recognized by dictation.",
                     locale: locale
                 ),
-                count: EntrevoixLocalization.dictationDictionaryCount(model.preferences.dictationDictionary.count, locale: locale),
                 systemImage: SettingsSection.dictationDictionary.systemImageName
             )
             Label {
@@ -758,7 +757,6 @@ private struct PromptListPage: View {
                     defaultValue: "Create reusable instructions to refine your dictations.",
                     locale: locale
                 ),
-                count: EntrevoixLocalization.promptCount(model.preferences.cleanupPrompts.count, locale: locale),
                 systemImage: "text.badge.checkmark"
             )
 
