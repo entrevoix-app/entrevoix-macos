@@ -251,6 +251,7 @@ private struct WorkflowEditor: View {
                 ForEach(steps) { step in
                     WorkflowStepCard(
                         title: promptName(for: step.promptID),
+                        preview: promptPreview(for: step.promptID),
                         systemImage: prompt(for: step.promptID)?.systemImageName ?? "questionmark",
                         removeAccessibilityLabel: EntrevoixLocalization.text(
                             "workflows.remove_prompt",
@@ -299,10 +300,19 @@ private struct WorkflowEditor: View {
         prompt(for: id)?.name
             ?? EntrevoixLocalization.text("workflows.missing_prompt", defaultValue: "Deleted prompt", locale: locale)
     }
+
+    private func promptPreview(for id: UUID) -> String? {
+        guard let instructions = prompt(for: id)?.instructions else { return nil }
+        let preview = instructions
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+        return preview.isEmpty ? nil : preview
+    }
 }
 
 private struct WorkflowStepCard: View {
     let title: String
+    let preview: String?
     let systemImage: String
     let removeAccessibilityLabel: String
     let reorderAccessibilityLabel: String
@@ -318,12 +328,21 @@ private struct WorkflowStepCard: View {
                 .frame(width: 32, height: 32)
                 .background(Color.accentColor.opacity(0.14), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-            Text(title)
-                .font(.body.weight(.medium))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
 
-            Spacer(minLength: 8)
+                if let preview {
+                    Text(preview)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Image(systemName: "line.3.horizontal")
                 .font(.body.weight(.semibold))
