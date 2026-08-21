@@ -148,9 +148,6 @@ struct ProviderCatalogView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text(text("settings.providers", "Providers"))
-                    .font(.title2.weight(.semibold))
-
                 if !model.providersSortedForDisplay.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         Text(text("provider.configured_title", "Configured providers"))
