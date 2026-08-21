@@ -154,6 +154,8 @@ private struct WorkflowListPage: View {
             }
             }
             .listStyle(.inset)
+            .contentMargins(.horizontal, SettingsLayout.pageInset, for: .scrollContent)
+            .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
         }
     }
 
@@ -274,7 +276,7 @@ private struct WorkflowEditor: View {
             }
         }
         .formStyle(.grouped)
-        .padding()
+        .padding(SettingsLayout.pageInset)
     }
 
     private func stepRow(_ step: WorkflowStepDraft) -> some View {

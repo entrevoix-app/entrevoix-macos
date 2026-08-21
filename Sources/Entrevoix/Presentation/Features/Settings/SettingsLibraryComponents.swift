@@ -25,7 +25,7 @@ struct SettingsLibraryHeader: View {
 
             Spacer(minLength: 12)
 
-            HStack(spacing: 8) {
+            HStack(spacing: SettingsLayout.gridSpacing) {
                 TextField(searchPlaceholder, text: $searchText)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 190)
@@ -38,8 +38,8 @@ struct SettingsLibraryHeader: View {
                 .disabled(isAddDisabled)
             }
         }
-        .padding(.horizontal)
-        .padding(.top)
+        .padding(.horizontal, SettingsLayout.pageInset)
+        .padding(.top, SettingsLayout.pageInset)
         .padding(.bottom, 12)
     }
 }

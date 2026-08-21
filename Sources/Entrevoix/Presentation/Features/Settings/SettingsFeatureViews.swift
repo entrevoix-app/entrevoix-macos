@@ -117,7 +117,7 @@ struct GeneralSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding()
+        .padding(SettingsLayout.pageInset)
         .alert(
             updateConfirmationTitle(locale: locale),
             isPresented: Binding(
@@ -313,7 +313,7 @@ struct STTSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding()
+        .padding(SettingsLayout.pageInset)
     }
 }
 
@@ -368,7 +368,7 @@ struct DictationDictionaryView: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
-            .padding(.horizontal)
+            .padding(.horizontal, SettingsLayout.pageInset)
             .padding(.bottom, 12)
 
             List {
@@ -430,6 +430,8 @@ struct DictationDictionaryView: View {
                 }
             }
             .listStyle(.inset)
+            .contentMargins(.horizontal, SettingsLayout.pageInset, for: .scrollContent)
+            .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
         }
         .onChange(of: isAdding) { _, adding in
             if adding { newTermIsFocused = true }
@@ -581,7 +583,7 @@ struct CleanupSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding()
+        .padding(SettingsLayout.pageInset)
     }
 }
 
@@ -796,6 +798,8 @@ private struct PromptListPage: View {
                 .listSectionSeparator(.hidden)
             }
             .listStyle(.inset)
+            .contentMargins(.horizontal, SettingsLayout.pageInset, for: .scrollContent)
+            .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
         }
         .navigationBarBackButtonHidden(true)
         .alert(EntrevoixLocalization.text("prompts.reset_title", defaultValue: "Reset prompt list?", locale: locale), isPresented: $state.showResetConfirmation) {
@@ -942,7 +946,7 @@ private struct PromptEditor: View {
             }
         }
         .formStyle(.grouped)
-        .padding()
+        .padding(SettingsLayout.pageInset)
     }
 }
 

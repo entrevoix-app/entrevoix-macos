@@ -26,8 +26,8 @@ struct ProvidersSettingsView: View {
                         Label(text("provider.back_to_catalog", "All providers"), systemImage: "chevron.left")
                     }
                     .buttonStyle(.plain)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 20)
+                    .padding(.horizontal, SettingsLayout.pageInset)
+                    .padding(.top, SettingsLayout.pageInset)
 
                     detail
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -66,7 +66,8 @@ struct ProvidersSettingsView: View {
                 Section {
                     Button(text("provider.remove_apple", "Remove Apple provider"), role: .destructive) { showDeleteConfirmation = true }
             }
-            }.padding()
+            }
+            .padding(SettingsLayout.pageInset)
         } else if selection == .codex, let profile = model.preferences.provider(for: .codex)?.codexProfile {
             CodexProviderEditor(
                 model: model,
@@ -205,7 +206,7 @@ struct ProviderCatalogView: View {
                 }
             }
         }
-        .contentMargins(24, for: .scrollContent)
+        .contentMargins(SettingsLayout.pageInset, for: .scrollContent)
     }
 
     private func text(_ key: String, _ fallback: String) -> String {
@@ -370,7 +371,7 @@ private struct CodexProviderEditor: View {
             }
         }
         .formStyle(.grouped)
-        .padding()
+        .padding(SettingsLayout.pageInset)
     }
 
     private func text(_ key: String, _ fallback: String) -> String {
@@ -448,7 +449,8 @@ private struct RemoteProviderEditor: View {
             if let first = validation.first { Label(first.localizedProviderValidationTitle(locale: model.interfaceLocale), systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
             HStack { Button(text("action.save", "Save"), action: onSave).buttonStyle(.borderedProminent); Button(text("action.cancel", "Cancel"), action: onCancel); Spacer(); Button(text("action.remove", "Remove"), role: .destructive, action: onDelete) }
         }
-        .formStyle(.grouped).padding()
+        .formStyle(.grouped)
+        .padding(SettingsLayout.pageInset)
     }
 
     private func text(_ key: String, _ fallback: String) -> String {
