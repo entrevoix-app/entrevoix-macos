@@ -650,6 +650,7 @@
     "workflows.none" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "No workflows saved" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Aucun workflow enregistré" } } } },
     "workflows.prompts" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Prompts" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Prompts" } } } },
     "workflows.remove_prompt" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove Prompt" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Retirer le prompt" } } } },
+    "workflows.reorder_prompt" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Reorder Prompt" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Réordonner le prompt" } } } },
     "workflows.select" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Select a workflow" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Sélectionnez un workflow" } } } },
     "workflows.step_count" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "%lld steps" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "%lld étapes" } } } }
   },

@@ -66,14 +66,6 @@ private final class WorkflowLibraryNavigationState {
         steps.removeAll { $0.id == stepID }
     }
 
-    func move(stepID: UUID, before targetID: UUID) {
-        guard stepID != targetID,
-              let sourceIndex = steps.firstIndex(where: { $0.id == stepID }),
-              let targetIndex = steps.firstIndex(where: { $0.id == targetID }) else { return }
-        let step = steps.remove(at: sourceIndex)
-        let adjustedTarget = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex
-        steps.insert(step, at: adjustedTarget)
-    }
 }
 
 struct WorkflowLibraryView: View {
@@ -187,7 +179,6 @@ private struct WorkflowEditorPage: View {
                     prompts: model.preferences.cleanupPrompts,
                     onAdd: navigation.add,
                     onRemove: navigation.remove,
-                    onMove: navigation.move,
                     locale: locale
                 )
             } else {
@@ -245,11 +236,10 @@ private struct WorkflowEditor: View {
     let prompts: [CleanupPrompt]
     let onAdd: (UUID) -> Void
     let onRemove: (UUID) -> Void
-    let onMove: (UUID, UUID) -> Void
     let locale: Locale
 
     var body: some View {
-        Form {
+        List {
             Section(EntrevoixLocalization.text("workflows.details", defaultValue: "Workflow details", locale: locale)) {
                 TextField(EntrevoixLocalization.text("field.name", defaultValue: "Name", locale: locale), text: $draft.name)
             }
@@ -261,6 +251,7 @@ private struct WorkflowEditor: View {
                 ForEach(steps) { step in
                     stepRow(step)
                 }
+                .onMove(perform: moveSteps)
                 Menu {
                     ForEach(prompts) { prompt in
                         Button(prompt.name) { onAdd(prompt.id) }
@@ -275,11 +266,24 @@ private struct WorkflowEditor: View {
                     .foregroundStyle(.orange)
             }
         }
-        .formStyle(.grouped)
+        .listStyle(.inset)
     }
 
     private func stepRow(_ step: WorkflowStepDraft) -> some View {
         HStack {
+            Image(systemName: "line.3.horizontal")
+                .foregroundStyle(.tertiary)
+                .frame(width: 16)
+                .accessibilityLabel(EntrevoixLocalization.text(
+                    "workflows.reorder_prompt",
+                    defaultValue: "Reorder Prompt",
+                    locale: locale
+                ))
+                .help(EntrevoixLocalization.text(
+                    "workflows.reorder_prompt",
+                    defaultValue: "Reorder Prompt",
+                    locale: locale
+                ))
             Text(promptName(for: step.promptID))
             Spacer()
             Button {
@@ -290,12 +294,10 @@ private struct WorkflowEditor: View {
             }
             .buttonStyle(.plain)
         }
-        .draggable(step.id.uuidString)
-        .dropDestination(for: String.self) { items, _ in
-            guard let item = items.first, let sourceID = UUID(uuidString: item) else { return false }
-            onMove(sourceID, step.id)
-            return true
-        }
+    }
+
+    private func moveSteps(from source: IndexSet, to destination: Int) {
+        steps.move(fromOffsets: source, toOffset: destination)
     }
 
     private func promptName(for id: UUID) -> String {
