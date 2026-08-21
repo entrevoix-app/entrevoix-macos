@@ -3,8 +3,8 @@ import Foundation
 import Observation
 import SwiftUI
 
-private enum WorkflowDestination: Hashable {
-    case edit(UUID, token: UUID)
+private enum WorkflowDestination {
+    case edit(UUID)
     case create(UUID)
 }
 
@@ -16,7 +16,7 @@ private struct WorkflowStepDraft: Identifiable, Equatable {
 @MainActor
 @Observable
 private final class WorkflowLibraryNavigationState {
-    var path: [WorkflowDestination] = []
+    var destination: WorkflowDestination?
     var draft: CleanupWorkflow?
     var originalDraft: CleanupWorkflow?
     var steps: [WorkflowStepDraft] = []
@@ -34,6 +34,7 @@ private final class WorkflowLibraryNavigationState {
         originalDraft = workflow
         steps = workflow.promptIDs.map { WorkflowStepDraft(id: UUID(), promptID: $0) }
         validationError = nil
+        destination = .edit(id)
     }
 
     func beginCreating(_ id: UUID) {
@@ -41,6 +42,7 @@ private final class WorkflowLibraryNavigationState {
         originalDraft = nil
         steps = []
         validationError = nil
+        destination = .create(id)
     }
 
     @discardableResult
@@ -66,6 +68,11 @@ private final class WorkflowLibraryNavigationState {
         steps.removeAll { $0.id == stepID }
     }
 
+    func closeEditor() {
+        destination = nil
+        validationError = nil
+    }
+
 }
 
 struct WorkflowLibraryView: View {
@@ -74,11 +81,12 @@ struct WorkflowLibraryView: View {
 
     var body: some View {
         @Bindable var navigation = navigation
-        NavigationStack(path: $navigation.path) {
+        Group {
+            if let destination = navigation.destination {
+                WorkflowEditorPage(model: model, navigation: navigation, destination: destination)
+            } else {
             WorkflowListPage(model: model, navigation: navigation)
-                .navigationDestination(for: WorkflowDestination.self) { destination in
-                    WorkflowEditorPage(model: model, navigation: navigation, destination: destination)
-                }
+            }
         }
     }
 }
@@ -98,7 +106,7 @@ private struct WorkflowListPage: View {
 
     var body: some View {
         let locale = model.interfaceLocale
-        VStack(spacing: 0) {
+        List {
             SettingsLibraryHeader(
                 title: EntrevoixLocalization.text("settings.workflows", defaultValue: "Workflows", locale: locale),
                 description: EntrevoixLocalization.text(
@@ -106,11 +114,11 @@ private struct WorkflowListPage: View {
                     defaultValue: "Combine prompts into a sequence for more elaborate cleanups.",
                     locale: locale
                 ),
-                count: EntrevoixLocalization.workflowCount(model.preferences.cleanupWorkflows.count, locale: locale)
+                count: EntrevoixLocalization.workflowCount(model.preferences.cleanupWorkflows.count, locale: locale),
+                systemImage: "point.3.connected.trianglepath.dotted"
             )
 
-            List {
-                if filteredWorkflows.isEmpty {
+            if filteredWorkflows.isEmpty {
                 ContentUnavailableView(
                     searchText.isEmpty
                         ? EntrevoixLocalization.text("workflows.none", defaultValue: "No workflows saved", locale: locale)
@@ -121,7 +129,6 @@ private struct WorkflowListPage: View {
                 ForEach(filteredWorkflows) { workflow in
                     Button {
                         navigation.beginEditing(workflow.id, model: model)
-                        navigation.path.append(.edit(workflow.id, token: UUID()))
                     } label: {
                         SettingsLibraryRow(
                             title: workflow.name,
@@ -136,11 +143,12 @@ private struct WorkflowListPage: View {
                     .listRowSeparator(workflow.id == filteredWorkflows.last?.id ? .hidden : .visible, edges: .bottom)
                 }
             }
-            }
-            .listStyle(.inset)
-            .contentMargins(.horizontal, SettingsLayout.pageInset, for: .scrollContent)
-            .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
         }
+        .listStyle(.inset)
+        .scrollBounceBehavior(.always)
+        .scrollEdgeEffectStyle(.soft, for: .top)
+        .contentMargins(.horizontal, SettingsLayout.pageInset, for: .scrollContent)
+        .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
         .searchable(
             text: $searchText,
             placement: .toolbar,
@@ -151,7 +159,6 @@ private struct WorkflowListPage: View {
                 Button {
                     let id = UUID()
                     navigation.beginCreating(id)
-                    navigation.path.append(.create(id))
                 } label: {
                     Label(
                         EntrevoixLocalization.text("workflows.add", defaultValue: "Add", locale: locale),
@@ -201,10 +208,18 @@ private struct WorkflowEditorPage: View {
         }
         .navigationTitle(isExisting ? EntrevoixLocalization.text("workflows.edit_title", defaultValue: "Edit Workflow", locale: locale) : EntrevoixLocalization.text("workflows.new_title", defaultValue: "New Workflow", locale: locale))
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button(action: navigation.closeEditor) {
+                    Label(
+                        EntrevoixLocalization.text("action.back", defaultValue: "Back", locale: locale),
+                        systemImage: "chevron.left"
+                    )
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button(EntrevoixLocalization.text("action.save", defaultValue: "Save", locale: locale)) {
                     guard navigation.save(model: model) else { return }
-                    navigation.path.removeLast()
+                    navigation.closeEditor()
                 }
             }
             if isExisting {
@@ -217,18 +232,12 @@ private struct WorkflowEditorPage: View {
                 }
             }
         }
-        .onAppear {
-            switch destination {
-            case .edit(let id, _): navigation.beginEditing(id, model: model)
-            case .create(let id): navigation.beginCreating(id)
-            }
-        }
         .alert(EntrevoixLocalization.text("workflows.delete_title", defaultValue: "Delete workflow?", locale: locale), isPresented: $showDeleteConfirmation) {
             Button(EntrevoixLocalization.text("workflows.delete", defaultValue: "Delete", locale: locale), role: .destructive) {
                 if let id = navigation.draft?.id {
                     model.deleteCleanupWorkflow(id: id)
                 }
-                navigation.path.removeLast()
+                navigation.closeEditor()
             }
             Button(EntrevoixLocalization.text("action.cancel", defaultValue: "Cancel", locale: locale), role: .cancel) { }
         }
@@ -331,6 +340,7 @@ private struct WorkflowEditor: View {
             }
         }
         .listStyle(.inset)
+        .scrollEdgeEffectStyle(.soft, for: .top)
         .sheet(isPresented: $isPromptPickerPresented) {
             WorkflowPromptPickerSheet(
                 prompts: prompts,

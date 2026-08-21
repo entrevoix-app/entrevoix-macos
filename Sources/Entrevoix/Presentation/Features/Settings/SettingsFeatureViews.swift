@@ -334,7 +334,7 @@ struct DictationDictionaryView: View {
 
     var body: some View {
         let locale = model.interfaceLocale
-        VStack(alignment: .leading, spacing: 0) {
+        List {
             SettingsLibraryHeader(
                 title: EntrevoixLocalization.text("settings.dictation_dictionary", defaultValue: "Dictation Dictionary", locale: locale),
                 description: EntrevoixLocalization.text(
@@ -342,7 +342,8 @@ struct DictationDictionaryView: View {
                     defaultValue: "Add names, acronyms, or technical terms that should be recognized by dictation.",
                     locale: locale
                 ),
-                count: EntrevoixLocalization.dictationDictionaryCount(model.preferences.dictationDictionary.count, locale: locale)
+                count: EntrevoixLocalization.dictationDictionaryCount(model.preferences.dictationDictionary.count, locale: locale),
+                systemImage: SettingsSection.dictationDictionary.systemImageName
             )
             Label {
                 Text(EntrevoixLocalization.text(
@@ -356,76 +357,78 @@ struct DictationDictionaryView: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
-            .padding(.horizontal, SettingsLayout.pageInset)
             .padding(.bottom, 12)
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
 
-            List {
-                if isAdding {
-                    dictionaryTermEditor(
-                        locale: locale,
-                        showsBottomSeparator: !filteredTerms.isEmpty
-                    )
-                }
+            if isAdding {
+                dictionaryTermEditor(
+                    locale: locale,
+                    showsBottomSeparator: !filteredTerms.isEmpty
+                )
+            }
 
-                if filteredTerms.isEmpty, !isAdding {
-                    ContentUnavailableView(
-                        searchText.isEmpty
-                            ? EntrevoixLocalization.text("dictation_dictionary.none", defaultValue: "No terms saved", locale: locale)
-                            : EntrevoixLocalization.text("library.no_results", defaultValue: "No matching items", locale: locale),
-                        systemImage: "textformat.abc"
-                    )
-                } else {
-                    ForEach(filteredTerms, id: \.self) { term in
-                        if editingTerm == term {
-                            dictionaryTermEditor(
-                                locale: locale,
-                                showsBottomSeparator: term != filteredTerms.last
-                            )
-                        } else {
-                            HStack(spacing: 8) {
+            if filteredTerms.isEmpty, !isAdding {
+                ContentUnavailableView(
+                    searchText.isEmpty
+                        ? EntrevoixLocalization.text("dictation_dictionary.none", defaultValue: "No terms saved", locale: locale)
+                        : EntrevoixLocalization.text("library.no_results", defaultValue: "No matching items", locale: locale),
+                    systemImage: "textformat.abc"
+                )
+            } else {
+                ForEach(filteredTerms, id: \.self) { term in
+                    if editingTerm == term {
+                        dictionaryTermEditor(
+                            locale: locale,
+                            showsBottomSeparator: term != filteredTerms.last
+                        )
+                    } else {
+                        HStack(spacing: 8) {
+                            Button {
+                                beginEditing(term)
+                            } label: {
+                                SettingsLibraryRow(title: term, systemImage: "textformat.abc")
+                            }
+                            .buttonStyle(.plain)
+                            .contentShape(Rectangle())
+
+                            Menu {
                                 Button {
                                     beginEditing(term)
                                 } label: {
-                                    SettingsLibraryRow(title: term, systemImage: "textformat.abc")
+                                    Label(
+                                        EntrevoixLocalization.text("dictation_dictionary.edit", defaultValue: "Edit term", locale: locale),
+                                        systemImage: "pencil"
+                                    )
                                 }
-                                .buttonStyle(.plain)
-                                .contentShape(Rectangle())
-
-                                Menu {
-                                    Button {
-                                        beginEditing(term)
-                                    } label: {
-                                        Label(
-                                            EntrevoixLocalization.text("dictation_dictionary.edit", defaultValue: "Edit term", locale: locale),
-                                            systemImage: "pencil"
-                                        )
-                                    }
-                                    Divider()
-                                    Button(role: .destructive) {
-                                        model.removeDictationDictionaryTerm(term)
-                                    } label: {
-                                        Label(
-                                            EntrevoixLocalization.text("dictation_dictionary.remove", defaultValue: "Remove term", locale: locale),
-                                            systemImage: "trash"
-                                        )
-                                    }
+                                Divider()
+                                Button(role: .destructive) {
+                                    model.removeDictationDictionaryTerm(term)
+                                } label: {
+                                    Label(
+                                        EntrevoixLocalization.text("dictation_dictionary.remove", defaultValue: "Remove term", locale: locale),
+                                        systemImage: "trash"
+                                    )
                                 }
-                                label: {
-                                    Image(systemName: "ellipsis.circle")
-                                }
-                                .menuStyle(.borderlessButton)
-                                .fixedSize()
-                                .accessibilityLabel(EntrevoixLocalization.text("dictation_dictionary.actions", defaultValue: "Term actions", locale: locale))
                             }
-                            .listRowSeparator(term == filteredTerms.last ? .hidden : .visible, edges: .bottom)
+                            label: {
+                                Image(systemName: "ellipsis.circle")
+                            }
+                            .menuStyle(.borderlessButton)
+                            .fixedSize()
+                            .accessibilityLabel(EntrevoixLocalization.text("dictation_dictionary.actions", defaultValue: "Term actions", locale: locale))
                         }
+                        .listRowSeparator(term == filteredTerms.last ? .hidden : .visible, edges: .bottom)
                     }
                 }
             }
-            .listStyle(.inset)
-            .contentMargins(.horizontal, SettingsLayout.pageInset, for: .scrollContent)
-            .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
         }
+        .listStyle(.inset)
+        .scrollBounceBehavior(.always)
+        .scrollEdgeEffectStyle(.soft, for: .top)
+        .contentMargins(.horizontal, SettingsLayout.pageInset, for: .scrollContent)
+        .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
         .searchable(
             text: $searchText,
             placement: .toolbar,
@@ -747,7 +750,7 @@ private struct PromptListPage: View {
 
     var body: some View {
         let locale = model.interfaceLocale
-        VStack(spacing: 0) {
+        List {
             SettingsLibraryHeader(
                 title: EntrevoixLocalization.text("settings.prompts", defaultValue: "Prompts", locale: locale),
                 description: EntrevoixLocalization.text(
@@ -755,60 +758,61 @@ private struct PromptListPage: View {
                     defaultValue: "Create reusable instructions to refine your dictations.",
                     locale: locale
                 ),
-                count: EntrevoixLocalization.promptCount(model.preferences.cleanupPrompts.count, locale: locale)
+                count: EntrevoixLocalization.promptCount(model.preferences.cleanupPrompts.count, locale: locale),
+                systemImage: "text.badge.checkmark"
             )
 
-            List {
-                Section {
-                    if filteredPrompts.isEmpty {
-                        ContentUnavailableView(
-                            searchText.isEmpty
-                                ? EntrevoixLocalization.text("prompts.none", defaultValue: "No prompts saved", locale: locale)
-                                : EntrevoixLocalization.text("library.no_results", defaultValue: "No matching items", locale: locale),
-                            systemImage: "text.badge.checkmark"
-                        )
-                    } else {
-                        ForEach(filteredPrompts) { prompt in
-                            Button {
-                                state.openPrompt(prompt.id)
-                            } label: {
-                                SettingsLibraryRow(
-                                    title: prompt.name,
-                                    systemImage: prompt.systemImageName,
-                                    detail: prompt.instructions,
-                                    status: model.promptLibrary.activeSelection == .prompt(prompt.id)
-                                        ? .active(EntrevoixLocalization.text("library.active", defaultValue: "Active", locale: locale))
-                                        : nil,
-                                    showsDisclosure: true
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            .contentShape(Rectangle())
-                            .listRowSeparator(prompt.id == filteredPrompts.last?.id ? .hidden : .visible, edges: .bottom)
+            Section {
+                if filteredPrompts.isEmpty {
+                    ContentUnavailableView(
+                        searchText.isEmpty
+                            ? EntrevoixLocalization.text("prompts.none", defaultValue: "No prompts saved", locale: locale)
+                            : EntrevoixLocalization.text("library.no_results", defaultValue: "No matching items", locale: locale),
+                        systemImage: "text.badge.checkmark"
+                    )
+                } else {
+                    ForEach(filteredPrompts) { prompt in
+                        Button {
+                            state.openPrompt(prompt.id)
+                        } label: {
+                            SettingsLibraryRow(
+                                title: prompt.name,
+                                systemImage: prompt.systemImageName,
+                                detail: prompt.instructions,
+                                status: model.promptLibrary.activeSelection == .prompt(prompt.id)
+                                    ? .active(EntrevoixLocalization.text("library.active", defaultValue: "Active", locale: locale))
+                                    : nil,
+                                showsDisclosure: true
+                            )
                         }
+                        .buttonStyle(.plain)
+                        .contentShape(Rectangle())
+                        .listRowSeparator(prompt.id == filteredPrompts.last?.id ? .hidden : .visible, edges: .bottom)
                     }
                 }
-                .listSectionSeparator(.hidden)
-
-                Section {
-                    Button {
-                        if model.cleanupPromptLibraryDiffersFromDefault {
-                            state.showResetConfirmation = true
-                        } else {
-                            model.resetPromptLibrary()
-                        }
-                    } label: {
-                        Label(EntrevoixLocalization.text("prompts.reset", defaultValue: "Reset List", locale: locale), systemImage: "arrow.counterclockwise")
-                    }
-                    .disabled(state.isDirty)
-                    .listRowSeparator(.hidden, edges: .bottom)
-                }
-                .listSectionSeparator(.hidden)
             }
-            .listStyle(.inset)
-            .contentMargins(.horizontal, SettingsLayout.pageInset, for: .scrollContent)
-            .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
+            .listSectionSeparator(.hidden)
+
+            Section {
+                Button {
+                    if model.cleanupPromptLibraryDiffersFromDefault {
+                        state.showResetConfirmation = true
+                    } else {
+                        model.resetPromptLibrary()
+                    }
+                } label: {
+                    Label(EntrevoixLocalization.text("prompts.reset", defaultValue: "Reset List", locale: locale), systemImage: "arrow.counterclockwise")
+                }
+                .disabled(state.isDirty)
+                .listRowSeparator(.hidden, edges: .bottom)
+            }
+            .listSectionSeparator(.hidden)
         }
+        .listStyle(.inset)
+        .scrollBounceBehavior(.always)
+        .scrollEdgeEffectStyle(.soft, for: .top)
+        .contentMargins(.horizontal, SettingsLayout.pageInset, for: .scrollContent)
+        .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
         .navigationBarBackButtonHidden(true)
         .searchable(
             text: $searchText,

@@ -15,7 +15,6 @@ struct SettingsView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .navigationTitle((selection ?? .general).title(locale: model.interfaceLocale))
-        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .frame(minWidth: 760, idealWidth: 920, minHeight: 520, idealHeight: 700)
     }
 

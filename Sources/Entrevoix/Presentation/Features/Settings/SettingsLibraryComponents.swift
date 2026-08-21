@@ -4,21 +4,33 @@ struct SettingsLibraryHeader: View {
     let title: String
     let description: String
     let count: String
+    let systemImage: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(spacing: SettingsLayout.gridSpacing) {
+            Image(systemName: systemImage)
+                .font(.title2.weight(.medium))
+                .foregroundStyle(.tint)
+                .frame(width: 48, height: 48)
+                .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             Text(title)
                 .font(.title2.weight(.semibold))
             Text(description)
                 .font(.callout)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
             Text(count)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, SettingsLayout.pageInset)
-        .padding(.top, SettingsLayout.pageInset)
-        .padding(.bottom, 12)
+        .padding(.vertical, SettingsLayout.pageInset)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.vertical, SettingsLayout.pageInset)
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
     }
 }
 
