@@ -276,14 +276,35 @@ private struct WorkflowEditor: View {
                     .listRowSeparator(.hidden)
                 }
                 .onMove(perform: moveSteps)
-                Menu {
-                    ForEach(prompts) { prompt in
-                        Button(prompt.name) { onAdd(prompt.id) }
+                ZStack {
+                    Menu {
+                        ForEach(prompts) { prompt in
+                            Button(prompt.name) { onAdd(prompt.id) }
+                        }
+                    } label: {
+                        Color.clear.frame(
+                            width: WorkflowStepCardLayout.iconTileSize,
+                            height: WorkflowStepCardLayout.iconTileSize
+                        )
                     }
-                } label: {
-                    Label(EntrevoixLocalization.text("workflows.add_prompt", defaultValue: "Add Prompt", locale: locale), systemImage: "plus")
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .accessibilityLabel(
+                        EntrevoixLocalization.text(
+                            "workflows.add_prompt",
+                            defaultValue: "Add Prompt",
+                            locale: locale
+                        )
+                    )
+
+                    WorkflowStepIconTile(systemImage: "plus")
+                        .allowsHitTesting(false)
                 }
+                .help(EntrevoixLocalization.text("workflows.add_prompt", defaultValue: "Add Prompt", locale: locale))
+                .padding(.leading, WorkflowStepCardLayout.cardPadding)
                 .disabled(prompts.isEmpty)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
                 .listRowSeparator(.hidden)
             }
             if let validationError {
@@ -362,6 +383,25 @@ private struct WorkflowStepConnection: View {
     }
 }
 
+private struct WorkflowStepIconTile: View {
+    let systemImage: String
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.accentColor.opacity(0.14))
+
+            Image(systemName: systemImage)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(Color.accentColor)
+        }
+        .frame(
+            width: WorkflowStepCardLayout.iconTileSize,
+            height: WorkflowStepCardLayout.iconTileSize
+        )
+    }
+}
+
 private struct WorkflowStepCard: View {
     let title: String
     let preview: String?
@@ -374,14 +414,7 @@ private struct WorkflowStepCard: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(Color.accentColor)
-                .frame(
-                    width: WorkflowStepCardLayout.iconTileSize,
-                    height: WorkflowStepCardLayout.iconTileSize
-                )
-                .background(Color.accentColor.opacity(0.14), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            WorkflowStepIconTile(systemImage: systemImage)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
