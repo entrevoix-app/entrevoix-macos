@@ -342,18 +342,8 @@ struct DictationDictionaryView: View {
                     defaultValue: "Add names, acronyms, or technical terms that should be recognized by dictation.",
                     locale: locale
                 ),
-                count: EntrevoixLocalization.dictationDictionaryCount(model.preferences.dictationDictionary.count, locale: locale),
-                searchPlaceholder: EntrevoixLocalization.text("dictation_dictionary.search", defaultValue: "Search…", locale: locale),
-                addAccessibilityLabel: EntrevoixLocalization.text("dictation_dictionary.add", defaultValue: "Add term", locale: locale),
-                isAddDisabled: isAdding || editingTerm != nil,
-                searchText: $searchText
-            ) {
-                guard !isAdding, editingTerm == nil else { return }
-                newTerm = ""
-                addError = false
-                isAdding = true
-                newTermIsFocused = true
-            }
+                count: EntrevoixLocalization.dictationDictionaryCount(model.preferences.dictationDictionary.count, locale: locale)
+            )
             Label {
                 Text(EntrevoixLocalization.text(
                     "dictation_dictionary.warning",
@@ -436,6 +426,22 @@ struct DictationDictionaryView: View {
             .contentMargins(.horizontal, SettingsLayout.pageInset, for: .scrollContent)
             .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
         }
+        .searchable(
+            text: $searchText,
+            placement: .toolbar,
+            prompt: EntrevoixLocalization.text("dictation_dictionary.search", defaultValue: "Search…", locale: locale)
+        )
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: beginAdding) {
+                    Label(
+                        EntrevoixLocalization.text("dictation_dictionary.add", defaultValue: "Add term", locale: locale),
+                        systemImage: "plus"
+                    )
+                }
+                .disabled(isAdding || editingTerm != nil)
+            }
+        }
         .onChange(of: isAdding) { _, adding in
             if adding { newTermIsFocused = true }
         }
@@ -506,6 +512,14 @@ struct DictationDictionaryView: View {
         editingTerm = term
         newTerm = term
         addError = false
+        newTermIsFocused = true
+    }
+
+    private func beginAdding() {
+        guard !isAdding, editingTerm == nil else { return }
+        newTerm = ""
+        addError = false
+        isAdding = true
         newTermIsFocused = true
     }
 
@@ -741,16 +755,8 @@ private struct PromptListPage: View {
                     defaultValue: "Create reusable instructions to refine your dictations.",
                     locale: locale
                 ),
-                count: EntrevoixLocalization.promptCount(model.preferences.cleanupPrompts.count, locale: locale),
-                searchPlaceholder: EntrevoixLocalization.text("library.search", defaultValue: "Search…", locale: locale),
-                addAccessibilityLabel: EntrevoixLocalization.text("prompts.add", defaultValue: "Add", locale: locale),
-                isAddDisabled: state.isDirty,
-                searchText: $searchText
-            ) {
-                let id = UUID()
-                state.beginCreating(id)
-                state.path.append(.create(id))
-            }
+                count: EntrevoixLocalization.promptCount(model.preferences.cleanupPrompts.count, locale: locale)
+            )
 
             List {
                 Section {
@@ -804,6 +810,26 @@ private struct PromptListPage: View {
             .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
         }
         .navigationBarBackButtonHidden(true)
+        .searchable(
+            text: $searchText,
+            placement: .toolbar,
+            prompt: EntrevoixLocalization.text("library.search", defaultValue: "Search…", locale: locale)
+        )
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    let id = UUID()
+                    state.beginCreating(id)
+                    state.path.append(.create(id))
+                } label: {
+                    Label(
+                        EntrevoixLocalization.text("prompts.add", defaultValue: "Add", locale: locale),
+                        systemImage: "plus"
+                    )
+                }
+                .disabled(state.isDirty)
+            }
+        }
         .alert(EntrevoixLocalization.text("prompts.reset_title", defaultValue: "Reset prompt list?", locale: locale), isPresented: $state.showResetConfirmation) {
             Button(EntrevoixLocalization.text("prompts.reset", defaultValue: "Reset List", locale: locale), role: .destructive) {
                 model.resetPromptLibrary()

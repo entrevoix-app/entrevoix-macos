@@ -106,16 +106,8 @@ private struct WorkflowListPage: View {
                     defaultValue: "Combine prompts into a sequence for more elaborate cleanups.",
                     locale: locale
                 ),
-                count: EntrevoixLocalization.workflowCount(model.preferences.cleanupWorkflows.count, locale: locale),
-                searchPlaceholder: EntrevoixLocalization.text("library.search", defaultValue: "Search…", locale: locale),
-                addAccessibilityLabel: EntrevoixLocalization.text("workflows.add", defaultValue: "Add", locale: locale),
-                isAddDisabled: false,
-                searchText: $searchText
-            ) {
-                let id = UUID()
-                navigation.beginCreating(id)
-                navigation.path.append(.create(id))
-            }
+                count: EntrevoixLocalization.workflowCount(model.preferences.cleanupWorkflows.count, locale: locale)
+            )
 
             List {
                 if filteredWorkflows.isEmpty {
@@ -148,6 +140,25 @@ private struct WorkflowListPage: View {
             .listStyle(.inset)
             .contentMargins(.horizontal, SettingsLayout.pageInset, for: .scrollContent)
             .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
+        }
+        .searchable(
+            text: $searchText,
+            placement: .toolbar,
+            prompt: EntrevoixLocalization.text("library.search", defaultValue: "Search…", locale: locale)
+        )
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    let id = UUID()
+                    navigation.beginCreating(id)
+                    navigation.path.append(.create(id))
+                } label: {
+                    Label(
+                        EntrevoixLocalization.text("workflows.add", defaultValue: "Add", locale: locale),
+                        systemImage: "plus"
+                    )
+                }
+            }
         }
     }
 

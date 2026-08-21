@@ -4,39 +4,17 @@ struct SettingsLibraryHeader: View {
     let title: String
     let description: String
     let count: String
-    let searchPlaceholder: String
-    let addAccessibilityLabel: String
-    let isAddDisabled: Bool
-    @Binding var searchText: String
-    let addAction: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.title2.weight(.semibold))
-                Text(description)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                Text(count)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 12)
-
-            HStack(spacing: SettingsLayout.gridSpacing) {
-                TextField(searchPlaceholder, text: $searchText)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 190)
-                Button(action: addAction) {
-                    Image(systemName: "plus")
-                }
-                .buttonStyle(.bordered)
-                .accessibilityLabel(addAccessibilityLabel)
-                .help(addAccessibilityLabel)
-                .disabled(isAddDisabled)
-            }
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.title2.weight(.semibold))
+            Text(description)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Text(count)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .padding(.horizontal, SettingsLayout.pageInset)
         .padding(.top, SettingsLayout.pageInset)
