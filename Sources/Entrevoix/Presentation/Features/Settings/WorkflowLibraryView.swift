@@ -237,6 +237,7 @@ private struct WorkflowEditor: View {
     let onAdd: (UUID) -> Void
     let onRemove: (UUID) -> Void
     let locale: Locale
+    @State private var isPromptPickerPresented = false
 
     var body: some View {
         List {
@@ -276,33 +277,41 @@ private struct WorkflowEditor: View {
                     .listRowSeparator(.hidden)
                 }
                 .onMove(perform: moveSteps)
-                ZStack {
-                    Menu {
-                        ForEach(prompts) { prompt in
-                            Button(prompt.name) { onAdd(prompt.id) }
-                        }
-                    } label: {
-                        Color.clear.frame(
-                            width: WorkflowStepCardLayout.iconTileSize,
-                            height: WorkflowStepCardLayout.iconTileSize
-                        )
-                    }
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden)
-                    .accessibilityLabel(
-                        EntrevoixLocalization.text(
-                            "workflows.add_prompt",
-                            defaultValue: "Add Prompt",
-                            locale: locale
-                        )
-                    )
-
+                Button {
+                    isPromptPickerPresented = true
+                } label: {
                     WorkflowStepIconTile(systemImage: "plus")
-                        .allowsHitTesting(false)
                 }
+                .buttonStyle(.plain)
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .accessibilityLabel(
+                    EntrevoixLocalization.text(
+                        "workflows.add_prompt",
+                        defaultValue: "Add Prompt",
+                        locale: locale
+                    )
+                )
                 .help(EntrevoixLocalization.text("workflows.add_prompt", defaultValue: "Add Prompt", locale: locale))
                 .padding(.leading, WorkflowStepCardLayout.cardPadding)
                 .disabled(prompts.isEmpty)
+                .popover(isPresented: $isPromptPickerPresented, arrowEdge: .bottom) {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(prompts) { prompt in
+                                Button(prompt.name) {
+                                    onAdd(prompt.id)
+                                    isPromptPickerPresented = false
+                                }
+                                .buttonStyle(.plain)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                            }
+                        }
+                    }
+                    .frame(minWidth: 200, maxHeight: 280)
+                    .padding(.vertical, 4)
+                }
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
                 .listRowSeparator(.hidden)
