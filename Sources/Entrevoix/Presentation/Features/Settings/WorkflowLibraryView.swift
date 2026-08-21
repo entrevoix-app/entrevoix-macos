@@ -249,7 +249,24 @@ private struct WorkflowEditor: View {
                         .foregroundStyle(.orange)
                 }
                 ForEach(steps) { step in
-                    stepRow(step)
+                    WorkflowStepCard(
+                        title: promptName(for: step.promptID),
+                        systemImage: prompt(for: step.promptID)?.systemImageName ?? "questionmark",
+                        removeAccessibilityLabel: EntrevoixLocalization.text(
+                            "workflows.remove_prompt",
+                            defaultValue: "Remove Prompt",
+                            locale: locale
+                        ),
+                        reorderAccessibilityLabel: EntrevoixLocalization.text(
+                            "workflows.reorder_prompt",
+                            defaultValue: "Reorder Prompt",
+                            locale: locale
+                        ),
+                        onRemove: { onRemove(step.id) }
+                    )
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                    .listRowSeparator(.hidden)
                 }
                 .onMove(perform: moveSteps)
                 Menu {
@@ -260,6 +277,7 @@ private struct WorkflowEditor: View {
                     Label(EntrevoixLocalization.text("workflows.add_prompt", defaultValue: "Add Prompt", locale: locale), systemImage: "plus")
                 }
                 .disabled(prompts.isEmpty)
+                .listRowSeparator(.hidden)
             }
             if let validationError {
                 Label(validationError.message(locale: locale), systemImage: "exclamationmark.triangle")
@@ -269,40 +287,66 @@ private struct WorkflowEditor: View {
         .listStyle(.inset)
     }
 
-    private func stepRow(_ step: WorkflowStepDraft) -> some View {
-        HStack {
-            Image(systemName: "line.3.horizontal")
-                .foregroundStyle(.tertiary)
-                .frame(width: 16)
-                .accessibilityLabel(EntrevoixLocalization.text(
-                    "workflows.reorder_prompt",
-                    defaultValue: "Reorder Prompt",
-                    locale: locale
-                ))
-                .help(EntrevoixLocalization.text(
-                    "workflows.reorder_prompt",
-                    defaultValue: "Reorder Prompt",
-                    locale: locale
-                ))
-            Text(promptName(for: step.promptID))
-            Spacer()
-            Button {
-                onRemove(step.id)
-            } label: {
-                Image(systemName: "minus.circle")
-                    .accessibilityLabel(EntrevoixLocalization.text("workflows.remove_prompt", defaultValue: "Remove Prompt", locale: locale))
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
     private func moveSteps(from source: IndexSet, to destination: Int) {
         steps.move(fromOffsets: source, toOffset: destination)
     }
 
+    private func prompt(for id: UUID) -> CleanupPrompt? {
+        prompts.first(where: { $0.id == id })
+    }
+
     private func promptName(for id: UUID) -> String {
-        prompts.first(where: { $0.id == id })?.name
+        prompt(for: id)?.name
             ?? EntrevoixLocalization.text("workflows.missing_prompt", defaultValue: "Deleted prompt", locale: locale)
+    }
+}
+
+private struct WorkflowStepCard: View {
+    let title: String
+    let systemImage: String
+    let removeAccessibilityLabel: String
+    let reorderAccessibilityLabel: String
+    let onRemove: () -> Void
+    @State private var isHovering = false
+    @FocusState private var isRemoveFocused: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 32, height: 32)
+                .background(Color.accentColor.opacity(0.14), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            Text(title)
+                .font(.body.weight(.medium))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            Image(systemName: "line.3.horizontal")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .frame(width: 20)
+                .accessibilityLabel(reorderAccessibilityLabel)
+                .help(reorderAccessibilityLabel)
+
+            Button(action: onRemove) {
+                Image(systemName: "minus.circle")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .opacity(isHovering || isRemoveFocused ? 1 : 0)
+            .focused($isRemoveFocused)
+            .accessibilityLabel(removeAccessibilityLabel)
+            .help(removeAccessibilityLabel)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onHover { isHovering = $0 }
     }
 }
 
