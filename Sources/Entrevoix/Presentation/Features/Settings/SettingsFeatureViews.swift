@@ -373,7 +373,10 @@ struct DictationDictionaryView: View {
 
             List {
                 if isAdding {
-                    dictionaryTermEditor(locale: locale)
+                    dictionaryTermEditor(
+                        locale: locale,
+                        showsBottomSeparator: !filteredTerms.isEmpty
+                    )
                 }
 
                 if filteredTerms.isEmpty, !isAdding {
@@ -386,7 +389,10 @@ struct DictationDictionaryView: View {
                 } else {
                     ForEach(filteredTerms, id: \.self) { term in
                         if editingTerm == term {
-                            dictionaryTermEditor(locale: locale)
+                            dictionaryTermEditor(
+                                locale: locale,
+                                showsBottomSeparator: term != filteredTerms.last
+                            )
                         } else {
                             HStack(spacing: 8) {
                                 SettingsLibraryRow(title: term, systemImage: "textformat.abc")
@@ -433,7 +439,10 @@ struct DictationDictionaryView: View {
         }
     }
 
-    private func dictionaryTermEditor(locale: Locale) -> some View {
+    private func dictionaryTermEditor(
+        locale: Locale,
+        showsBottomSeparator: Bool
+    ) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "textformat.abc")
                 .foregroundStyle(.tint)
@@ -475,7 +484,16 @@ struct DictationDictionaryView: View {
                 }
             }
         }
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .listRowBackground(Color(nsColor: .controlBackgroundColor))
+        .listRowSeparator(.hidden, edges: .bottom)
+        .overlay(alignment: .bottom) {
+            if showsBottomSeparator {
+                Divider()
+                    .frame(maxWidth: .infinity)
+            }
+        }
     }
 
     private func beginEditing(_ term: String) {
