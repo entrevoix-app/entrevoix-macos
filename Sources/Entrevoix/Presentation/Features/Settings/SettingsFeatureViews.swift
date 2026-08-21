@@ -393,8 +393,13 @@ struct DictationDictionaryView: View {
                             )
                         } else {
                             HStack(spacing: 8) {
-                                SettingsLibraryRow(title: term, systemImage: "textformat.abc")
-                                    .textSelection(.enabled)
+                                Button {
+                                    beginEditing(term)
+                                } label: {
+                                    SettingsLibraryRow(title: term, systemImage: "textformat.abc")
+                                }
+                                .buttonStyle(.plain)
+                                .contentShape(Rectangle())
 
                                 Menu {
                                     Button {

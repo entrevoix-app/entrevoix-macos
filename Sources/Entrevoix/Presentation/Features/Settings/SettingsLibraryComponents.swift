@@ -100,6 +100,8 @@ struct SettingsLibraryRow: View {
             }
         }
         .padding(.vertical, 3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
         .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
     }
 
