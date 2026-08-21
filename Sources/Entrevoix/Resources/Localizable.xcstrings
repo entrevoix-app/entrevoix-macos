@@ -123,10 +123,12 @@
       }
     },
     "dictation_dictionary.add" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Add term" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Ajouter un terme" } } } },
+    "dictation_dictionary.actions" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Term actions" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Actions du terme" } } } },
     "dictation_dictionary.cancel" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Annuler" } } } },
     "dictation_dictionary.column" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Dictionary String" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Chaîne du dictionnaire" } } } },
     "dictation_dictionary.count" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "%lld strings" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "%lld chaînes" } } } },
     "dictation_dictionary.description" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Add names, acronyms, or technical terms that should be recognized by dictation." } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Ajoutez des noms, acronymes ou termes techniques que la dictée doit reconnaître." } } } },
+    "dictation_dictionary.edit" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Edit term" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Modifier le terme" } } } },
     "dictation_dictionary.entry_placeholder" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Term" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Terme" } } } },
     "dictation_dictionary.invalid_entry" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter a non-empty term that is not already in the dictionary." } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Saisissez un terme non vide qui n’existe pas déjà dans le dictionnaire." } } } },
     "dictation_dictionary.none" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "No terms saved" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Aucun terme enregistré" } } } },

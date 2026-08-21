@@ -185,6 +185,16 @@ final class AppStore {
         savePreferences()
     }
 
+    @discardableResult
+    func updateDictationDictionaryTerm(_ term: String, to rawTerm: String) -> Bool {
+        guard let updatedTerm = AppPreferences.normalizedDictationDictionary([rawTerm]).first,
+              let index = preferences.dictationDictionary.firstIndex(of: term),
+              updatedTerm == term || !preferences.dictationDictionary.contains(updatedTerm) else { return false }
+        preferences.dictationDictionary[index] = updatedTerm
+        savePreferences()
+        return true
+    }
+
     var cleanupPromptForDisplay: String { activeCleanupPrompt?.instructions ?? "" }
 
     init(dependencies: AppStoreDependencies, initialPreferences: AppPreferences) {

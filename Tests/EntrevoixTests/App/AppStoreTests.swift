@@ -190,7 +190,12 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(context.model.preferences.dictationDictionaryPrompt, "Symfony, CapRover")
         XCTAssertEqual(context.preferencesStore.saved.last?.dictationDictionary, ["Symfony", "CapRover"])
 
-        context.model.removeDictationDictionaryTerm("Symfony")
+        XCTAssertFalse(context.model.updateDictationDictionaryTerm("Symfony", to: "CapRover"))
+        XCTAssertFalse(context.model.updateDictationDictionaryTerm("Symfony", to: "   "))
+        XCTAssertTrue(context.model.updateDictationDictionaryTerm("Symfony", to: "  Symfony Framework  "))
+        XCTAssertEqual(context.model.preferences.dictationDictionary, ["Symfony Framework", "CapRover"])
+
+        context.model.removeDictationDictionaryTerm("Symfony Framework")
         XCTAssertEqual(context.model.preferences.dictationDictionary, ["CapRover"])
     }
 

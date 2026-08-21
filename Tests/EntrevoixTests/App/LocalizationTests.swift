@@ -51,6 +51,8 @@ final class LocalizationTests: XCTestCase {
             "dictation_dictionary.none",
             "dictation_dictionary.search",
             "dictation_dictionary.add",
+            "dictation_dictionary.actions",
+            "dictation_dictionary.edit",
             "dictation_dictionary.remove",
             "dictation_dictionary.warning",
             "menu.language",

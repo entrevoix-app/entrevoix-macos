@@ -321,6 +321,7 @@ struct DictationDictionaryView: View {
     @Bindable var model: AppStore
     @State private var searchText = ""
     @State private var isAdding = false
+    @State private var editingTerm: String?
     @State private var newTerm = ""
     @State private var addError = false
     @FocusState private var newTermIsFocused: Bool
@@ -346,14 +347,14 @@ struct DictationDictionaryView: View {
                 count: EntrevoixLocalization.dictationDictionaryCount(model.preferences.dictationDictionary.count, locale: locale),
                 searchPlaceholder: EntrevoixLocalization.text("dictation_dictionary.search", defaultValue: "Search…", locale: locale),
                 addAccessibilityLabel: EntrevoixLocalization.text("dictation_dictionary.add", defaultValue: "Add term", locale: locale),
-                isAddDisabled: isAdding,
+                isAddDisabled: isAdding || editingTerm != nil,
                 searchText: $searchText
             ) {
-                    guard !isAdding else { return }
-                    newTerm = ""
-                    addError = false
-                    isAdding = true
-                    newTermIsFocused = true
+                guard !isAdding, editingTerm == nil else { return }
+                newTerm = ""
+                addError = false
+                isAdding = true
+                newTermIsFocused = true
             }
             Label {
                 Text(EntrevoixLocalization.text(
@@ -372,41 +373,7 @@ struct DictationDictionaryView: View {
 
             List {
                 if isAdding {
-                    HStack(spacing: 10) {
-                        Image(systemName: "textformat.abc")
-                            .foregroundStyle(.tint)
-                            .frame(width: 16)
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 8) {
-                            TextField(
-                                EntrevoixLocalization.text("dictation_dictionary.entry_placeholder", defaultValue: "Term", locale: locale),
-                                text: $newTerm
-                            )
-                            .textFieldStyle(.plain)
-                            .focused($newTermIsFocused)
-                            .onSubmit(commitNewTerm)
-                            .onExitCommand(perform: cancelNewTerm)
-                            .onChange(of: newTerm) { _, _ in addError = false }
-
-                            Button(action: cancelNewTerm) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(EntrevoixLocalization.text("dictation_dictionary.cancel", defaultValue: "Cancel", locale: locale))
-                            }
-                            if addError {
-                                Text(EntrevoixLocalization.text(
-                                    "dictation_dictionary.invalid_entry",
-                                    defaultValue: "Enter a non-empty term that is not already in the dictionary.",
-                                    locale: locale
-                                ))
-                                .font(.caption)
-                                .foregroundStyle(.orange)
-                            }
-                        }
-                    }
-                    .listRowBackground(Color(nsColor: .controlBackgroundColor))
+                    dictionaryTermEditor(locale: locale)
                 }
 
                 if filteredTerms.isEmpty, !isAdding {
@@ -418,19 +385,41 @@ struct DictationDictionaryView: View {
                     )
                 } else {
                     ForEach(filteredTerms, id: \.self) { term in
-                        SettingsLibraryRow(title: term, systemImage: "textformat.abc")
-                            .listRowSeparator(term == filteredTerms.last ? .hidden : .visible, edges: .bottom)
-                            .textSelection(.enabled)
-                            .contextMenu {
-                                Button(role: .destructive) {
-                                    model.removeDictationDictionaryTerm(term)
-                                } label: {
-                                    Label(
-                                        EntrevoixLocalization.text("dictation_dictionary.remove", defaultValue: "Remove term", locale: locale),
-                                        systemImage: "trash"
-                                    )
+                        if editingTerm == term {
+                            dictionaryTermEditor(locale: locale)
+                        } else {
+                            HStack(spacing: 8) {
+                                SettingsLibraryRow(title: term, systemImage: "textformat.abc")
+                                    .textSelection(.enabled)
+
+                                Menu {
+                                    Button {
+                                        beginEditing(term)
+                                    } label: {
+                                        Label(
+                                            EntrevoixLocalization.text("dictation_dictionary.edit", defaultValue: "Edit term", locale: locale),
+                                            systemImage: "pencil"
+                                        )
+                                    }
+                                    Divider()
+                                    Button(role: .destructive) {
+                                        model.removeDictationDictionaryTerm(term)
+                                    } label: {
+                                        Label(
+                                            EntrevoixLocalization.text("dictation_dictionary.remove", defaultValue: "Remove term", locale: locale),
+                                            systemImage: "trash"
+                                        )
+                                    }
                                 }
+                                label: {
+                                    Image(systemName: "ellipsis.circle")
+                                }
+                                .menuStyle(.borderlessButton)
+                                .fixedSize()
+                                .accessibilityLabel(EntrevoixLocalization.text("dictation_dictionary.actions", defaultValue: "Term actions", locale: locale))
                             }
+                            .listRowSeparator(term == filteredTerms.last ? .hidden : .visible, edges: .bottom)
+                        }
                     }
                 }
             }
@@ -439,21 +428,85 @@ struct DictationDictionaryView: View {
         .onChange(of: isAdding) { _, adding in
             if adding { newTermIsFocused = true }
         }
+        .onChange(of: editingTerm) { _, editingTerm in
+            if editingTerm != nil { newTermIsFocused = true }
+        }
     }
 
-    private func commitNewTerm() {
-        guard model.addDictationDictionaryTerm(newTerm) else {
+    private func dictionaryTermEditor(locale: Locale) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "textformat.abc")
+                .foregroundStyle(.tint)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    TextField(
+                        EntrevoixLocalization.text("dictation_dictionary.entry_placeholder", defaultValue: "Term", locale: locale),
+                        text: $newTerm
+                    )
+                    .textFieldStyle(.plain)
+                    .focused($newTermIsFocused)
+                    .onSubmit(commitDictionaryTerm)
+                    .onExitCommand(perform: cancelDictionaryTerm)
+                    .onChange(of: newTerm) { _, _ in addError = false }
+
+                    Button(action: commitDictionaryTerm) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.tint)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(EntrevoixLocalization.text("action.save", defaultValue: "Save", locale: locale))
+
+                    Button(action: cancelDictionaryTerm) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(EntrevoixLocalization.text("dictation_dictionary.cancel", defaultValue: "Cancel", locale: locale))
+                }
+                if addError {
+                    Text(EntrevoixLocalization.text(
+                        "dictation_dictionary.invalid_entry",
+                        defaultValue: "Enter a non-empty term that is not already in the dictionary.",
+                        locale: locale
+                    ))
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                }
+            }
+        }
+        .listRowBackground(Color(nsColor: .controlBackgroundColor))
+    }
+
+    private func beginEditing(_ term: String) {
+        guard !isAdding else { return }
+        editingTerm = term
+        newTerm = term
+        addError = false
+        newTermIsFocused = true
+    }
+
+    private func commitDictionaryTerm() {
+        let didSave: Bool
+        if let editingTerm {
+            didSave = model.updateDictationDictionaryTerm(editingTerm, to: newTerm)
+        } else {
+            didSave = model.addDictationDictionaryTerm(newTerm)
+        }
+        guard didSave else {
             addError = true
             newTermIsFocused = true
             return
         }
         isAdding = false
+        editingTerm = nil
         newTerm = ""
         addError = false
     }
 
-    private func cancelNewTerm() {
+    private func cancelDictionaryTerm() {
         isAdding = false
+        editingTerm = nil
         newTerm = ""
         addError = false
         newTermIsFocused = false
