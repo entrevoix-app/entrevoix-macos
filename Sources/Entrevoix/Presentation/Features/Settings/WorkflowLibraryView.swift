@@ -294,24 +294,6 @@ private struct WorkflowEditor: View {
                 .help(EntrevoixLocalization.text("workflows.add_prompt", defaultValue: "Add Prompt", locale: locale))
                 .padding(.leading, WorkflowStepCardLayout.cardPadding)
                 .disabled(prompts.isEmpty)
-                .popover(isPresented: $isPromptPickerPresented, arrowEdge: .bottom) {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(prompts) { prompt in
-                                Button(prompt.name) {
-                                    onAdd(prompt.id)
-                                    isPromptPickerPresented = false
-                                }
-                                .buttonStyle(.plain)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                            }
-                        }
-                    }
-                    .frame(minWidth: 200, maxHeight: 280)
-                    .padding(.vertical, 4)
-                }
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
                 .listRowSeparator(.hidden)
@@ -322,6 +304,13 @@ private struct WorkflowEditor: View {
             }
         }
         .listStyle(.inset)
+        .sheet(isPresented: $isPromptPickerPresented) {
+            WorkflowPromptPickerSheet(
+                prompts: prompts,
+                locale: locale,
+                onAdd: onAdd
+            )
+        }
     }
 
     private func moveSteps(from source: IndexSet, to destination: Int) {
@@ -343,6 +332,50 @@ private struct WorkflowEditor: View {
             .split(whereSeparator: \.isWhitespace)
             .joined(separator: " ")
         return preview.isEmpty ? nil : preview
+    }
+}
+
+private struct WorkflowPromptPickerSheet: View {
+    let prompts: [CleanupPrompt]
+    let locale: Locale
+    let onAdd: (UUID) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List(prompts) { prompt in
+            Button {
+                onAdd(prompt.id)
+                dismiss()
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(prompt.name)
+                        .foregroundStyle(.primary)
+                    Text(prompt.instructions)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .navigationTitle(
+            EntrevoixLocalization.text(
+                "workflows.add_prompt",
+                defaultValue: "Add Prompt",
+                locale: locale
+            )
+        )
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(EntrevoixLocalization.text("action.cancel", defaultValue: "Cancel", locale: locale)) {
+                    dismiss()
+                }
+            }
+        }
+        .frame(minWidth: 360, minHeight: 300)
     }
 }
 
