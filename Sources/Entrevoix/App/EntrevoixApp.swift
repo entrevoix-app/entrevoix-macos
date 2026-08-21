@@ -81,6 +81,7 @@ struct EntrevoixApp: App {
             }
         }
         .defaultLaunchBehavior(.suppressed)
+        .windowToolbarStyle(.unified)
 
         Window(
             EntrevoixLocalization.text("window.logs", defaultValue: "Entrevoix Logs", locale: interfaceLocale),
