@@ -248,7 +248,7 @@ private struct WorkflowEditor: View {
                     Label(EntrevoixLocalization.text("workflows.empty_warning", defaultValue: "Add at least one prompt before saving this workflow.", locale: locale), systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.orange)
                 }
-                ForEach(steps) { step in
+                ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
                     WorkflowStepCard(
                         title: promptName(for: step.promptID),
                         preview: promptPreview(for: step.promptID),
@@ -265,8 +265,21 @@ private struct WorkflowEditor: View {
                         ),
                         onRemove: { onRemove(step.id) }
                     )
+                    .padding(.vertical, 4)
+                    .overlay(alignment: .topLeading) {
+                        if index > 0 {
+                            WorkflowStepConnection()
+                                .offset(x: 27)
+                        }
+                    }
+                    .overlay(alignment: .bottomLeading) {
+                        if index < steps.count - 1 {
+                            WorkflowStepConnection()
+                                .offset(x: 27)
+                        }
+                    }
                     .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                    .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
                 }
                 .onMove(perform: moveSteps)
@@ -369,6 +382,16 @@ private struct WorkflowStepCard: View {
         )
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onHover { isHovering = $0 }
+    }
+}
+
+private struct WorkflowStepConnection: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color(nsColor: .separatorColor))
+            .frame(width: 2, height: 4)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
