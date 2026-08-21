@@ -363,7 +363,10 @@ private struct WorkflowStepCard: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .quaternaryLabelColor), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(
+            Color(nsColor: .quaternaryLabelColor).opacity(0.3),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onHover { isHovering = $0 }
     }
