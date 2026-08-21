@@ -356,7 +356,7 @@ struct DictationDictionaryView: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
-            .padding(.bottom, 12)
+            .padding(.bottom, SettingsLayout.sectionSpacing)
             .listRowInsets(EdgeInsets())
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
@@ -760,36 +760,33 @@ private struct PromptListPage: View {
                 systemImage: "text.badge.checkmark"
             )
 
-            Section {
-                if filteredPrompts.isEmpty {
-                    ContentUnavailableView(
-                        searchText.isEmpty
-                            ? EntrevoixLocalization.text("prompts.none", defaultValue: "No prompts saved", locale: locale)
-                            : EntrevoixLocalization.text("library.no_results", defaultValue: "No matching items", locale: locale),
-                        systemImage: "text.badge.checkmark"
-                    )
-                } else {
-                    ForEach(filteredPrompts) { prompt in
-                        Button {
-                            state.openPrompt(prompt.id)
-                        } label: {
-                            SettingsLibraryRow(
-                                title: prompt.name,
-                                systemImage: prompt.systemImageName,
-                                detail: prompt.instructions,
-                                status: model.promptLibrary.activeSelection == .prompt(prompt.id)
-                                    ? .active(EntrevoixLocalization.text("library.active", defaultValue: "Active", locale: locale))
-                                    : nil,
-                                showsDisclosure: true
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .contentShape(Rectangle())
-                        .listRowSeparator(prompt.id == filteredPrompts.last?.id ? .hidden : .visible, edges: .bottom)
+            if filteredPrompts.isEmpty {
+                ContentUnavailableView(
+                    searchText.isEmpty
+                        ? EntrevoixLocalization.text("prompts.none", defaultValue: "No prompts saved", locale: locale)
+                        : EntrevoixLocalization.text("library.no_results", defaultValue: "No matching items", locale: locale),
+                    systemImage: "text.badge.checkmark"
+                )
+            } else {
+                ForEach(filteredPrompts) { prompt in
+                    Button {
+                        state.openPrompt(prompt.id)
+                    } label: {
+                        SettingsLibraryRow(
+                            title: prompt.name,
+                            systemImage: prompt.systemImageName,
+                            detail: prompt.instructions,
+                            status: model.promptLibrary.activeSelection == .prompt(prompt.id)
+                                ? .active(EntrevoixLocalization.text("library.active", defaultValue: "Active", locale: locale))
+                                : nil,
+                            showsDisclosure: true
+                        )
                     }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                    .listRowSeparator(prompt.id == filteredPrompts.last?.id ? .hidden : .visible, edges: .bottom)
                 }
             }
-            .listSectionSeparator(.hidden)
 
             Section {
                 Button {
