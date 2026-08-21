@@ -419,6 +419,7 @@ struct DictationDictionaryView: View {
                 } else {
                     ForEach(filteredTerms, id: \.self) { term in
                         SettingsLibraryRow(title: term, systemImage: "textformat.abc")
+                            .listRowSeparator(term == filteredTerms.last ? .hidden : .visible, edges: .bottom)
                             .textSelection(.enabled)
                             .contextMenu {
                                 Button(role: .destructive) {
@@ -677,45 +678,51 @@ private struct PromptListPage: View {
             }
 
             List {
-                if filteredPrompts.isEmpty {
-                    ContentUnavailableView(
-                        searchText.isEmpty
-                            ? EntrevoixLocalization.text("prompts.none", defaultValue: "No prompts saved", locale: locale)
-                            : EntrevoixLocalization.text("library.no_results", defaultValue: "No matching items", locale: locale),
-                        systemImage: "text.badge.checkmark"
-                    )
-                } else {
-                    ForEach(filteredPrompts) { prompt in
-                        Button {
-                            state.openPrompt(prompt.id)
-                        } label: {
-                            SettingsLibraryRow(
-                                title: prompt.name,
-                                systemImage: prompt.systemImageName,
-                                detail: prompt.instructions,
-                                status: model.promptLibrary.activeSelection == .prompt(prompt.id)
-                                    ? .active(EntrevoixLocalization.text("library.active", defaultValue: "Active", locale: locale))
-                                    : nil,
-                                showsDisclosure: true
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .contentShape(Rectangle())
-                    }
-                }
-            }
-
-            Section {
-                Button {
-                    if model.cleanupPromptLibraryDiffersFromDefault {
-                        state.showResetConfirmation = true
+                Section {
+                    if filteredPrompts.isEmpty {
+                        ContentUnavailableView(
+                            searchText.isEmpty
+                                ? EntrevoixLocalization.text("prompts.none", defaultValue: "No prompts saved", locale: locale)
+                                : EntrevoixLocalization.text("library.no_results", defaultValue: "No matching items", locale: locale),
+                            systemImage: "text.badge.checkmark"
+                        )
                     } else {
-                        model.resetPromptLibrary()
+                        ForEach(filteredPrompts) { prompt in
+                            Button {
+                                state.openPrompt(prompt.id)
+                            } label: {
+                                SettingsLibraryRow(
+                                    title: prompt.name,
+                                    systemImage: prompt.systemImageName,
+                                    detail: prompt.instructions,
+                                    status: model.promptLibrary.activeSelection == .prompt(prompt.id)
+                                        ? .active(EntrevoixLocalization.text("library.active", defaultValue: "Active", locale: locale))
+                                        : nil,
+                                    showsDisclosure: true
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .contentShape(Rectangle())
+                            .listRowSeparator(prompt.id == filteredPrompts.last?.id ? .hidden : .visible, edges: .bottom)
+                        }
                     }
-                } label: {
-                    Label(EntrevoixLocalization.text("prompts.reset", defaultValue: "Reset List", locale: locale), systemImage: "arrow.counterclockwise")
                 }
-                .disabled(state.isDirty)
+                .listSectionSeparator(.hidden)
+
+                Section {
+                    Button {
+                        if model.cleanupPromptLibraryDiffersFromDefault {
+                            state.showResetConfirmation = true
+                        } else {
+                            model.resetPromptLibrary()
+                        }
+                    } label: {
+                        Label(EntrevoixLocalization.text("prompts.reset", defaultValue: "Reset List", locale: locale), systemImage: "arrow.counterclockwise")
+                    }
+                    .disabled(state.isDirty)
+                    .listRowSeparator(.hidden, edges: .bottom)
+                }
+                .listSectionSeparator(.hidden)
             }
             .listStyle(.inset)
         }

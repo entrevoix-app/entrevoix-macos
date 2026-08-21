@@ -149,6 +149,7 @@ private struct WorkflowListPage: View {
                     }
                     .buttonStyle(.plain)
                     .contentShape(Rectangle())
+                    .listRowSeparator(workflow.id == filteredWorkflows.last?.id ? .hidden : .visible, edges: .bottom)
                 }
             }
             }

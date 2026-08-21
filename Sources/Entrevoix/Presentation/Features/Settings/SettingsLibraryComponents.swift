@@ -100,6 +100,7 @@ struct SettingsLibraryRow: View {
             }
         }
         .padding(.vertical, 3)
+        .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
     }
 
     @ViewBuilder
