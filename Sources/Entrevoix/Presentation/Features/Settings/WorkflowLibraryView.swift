@@ -276,7 +276,6 @@ private struct WorkflowEditor: View {
             }
         }
         .formStyle(.grouped)
-        .padding(SettingsLayout.pageInset)
     }
 
     private func stepRow(_ step: WorkflowStepDraft) -> some View {

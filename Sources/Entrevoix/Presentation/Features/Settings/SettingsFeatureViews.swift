@@ -117,7 +117,6 @@ struct GeneralSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding(SettingsLayout.pageInset)
         .alert(
             updateConfirmationTitle(locale: locale),
             isPresented: Binding(
@@ -313,7 +312,6 @@ struct STTSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding(SettingsLayout.pageInset)
     }
 }
 
@@ -583,7 +581,6 @@ struct CleanupSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding(SettingsLayout.pageInset)
     }
 }
 
@@ -946,7 +943,6 @@ private struct PromptEditor: View {
             }
         }
         .formStyle(.grouped)
-        .padding(SettingsLayout.pageInset)
     }
 }
 

@@ -65,9 +65,9 @@ struct ProvidersSettingsView: View {
                 }
                 Section {
                     Button(text("provider.remove_apple", "Remove Apple provider"), role: .destructive) { showDeleteConfirmation = true }
+                }
             }
-            }
-            .padding(SettingsLayout.pageInset)
+            .formStyle(.grouped)
         } else if selection == .codex, let profile = model.preferences.provider(for: .codex)?.codexProfile {
             CodexProviderEditor(
                 model: model,
@@ -371,7 +371,6 @@ private struct CodexProviderEditor: View {
             }
         }
         .formStyle(.grouped)
-        .padding(SettingsLayout.pageInset)
     }
 
     private func text(_ key: String, _ fallback: String) -> String {
@@ -450,7 +449,6 @@ private struct RemoteProviderEditor: View {
             HStack { Button(text("action.save", "Save"), action: onSave).buttonStyle(.borderedProminent); Button(text("action.cancel", "Cancel"), action: onCancel); Spacer(); Button(text("action.remove", "Remove"), role: .destructive, action: onDelete) }
         }
         .formStyle(.grouped)
-        .padding(SettingsLayout.pageInset)
     }
 
     private func text(_ key: String, _ fallback: String) -> String {
