@@ -117,6 +117,7 @@ struct GeneralSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .settingsGroupedFormContentMargins()
         .alert(
             updateConfirmationTitle(locale: locale),
             isPresented: Binding(
@@ -312,6 +313,7 @@ struct STTSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .settingsGroupedFormContentMargins()
     }
 }
 
@@ -424,9 +426,9 @@ struct DictationDictionaryView: View {
             }
         }
         .listStyle(.inset)
+        .settingsPageContentMargins()
         .scrollBounceBehavior(.always)
         .scrollEdgeEffectStyle(.soft, for: .top)
-        .contentMargins(.horizontal, SettingsLayout.pageInset, for: .scrollContent)
         .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
         .searchable(
             text: $searchText,
@@ -602,6 +604,7 @@ struct CleanupSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .settingsGroupedFormContentMargins()
     }
 }
 
@@ -804,9 +807,9 @@ private struct PromptListPage: View {
             .listSectionSeparator(.hidden)
         }
         .listStyle(.inset)
+        .settingsPageContentMargins()
         .scrollBounceBehavior(.always)
         .scrollEdgeEffectStyle(.soft, for: .top)
-        .contentMargins(.horizontal, SettingsLayout.pageInset, for: .scrollContent)
         .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
         .navigationBarBackButtonHidden(true)
         .searchable(
@@ -973,6 +976,7 @@ private struct PromptEditor: View {
             }
         }
         .formStyle(.grouped)
+        .settingsGroupedFormContentMargins()
     }
 }
 

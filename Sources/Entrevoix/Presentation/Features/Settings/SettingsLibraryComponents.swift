@@ -27,8 +27,8 @@ struct SettingsLibraryHeader: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, SettingsLayout.pageInset)
-        .padding(.vertical, SettingsLayout.pageInset)
+        .padding(.horizontal, SettingsLayout.cardContentInset)
+        .padding(.vertical, SettingsLayout.cardContentInset)
         .background(
             Color.primary.opacity(0.04),
             in: RoundedRectangle(cornerRadius: SettingsLayout.cardCornerRadius, style: .continuous)

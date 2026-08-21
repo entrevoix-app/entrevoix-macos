@@ -27,7 +27,7 @@ struct ProvidersSettingsView: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.horizontal, SettingsLayout.pageInset)
-                    .padding(.top, SettingsLayout.pageInset)
+                    .padding(.top, SettingsLayout.toolbarContentInset)
 
                     detail
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -68,6 +68,7 @@ struct ProvidersSettingsView: View {
                 }
             }
             .formStyle(.grouped)
+            .settingsPageContentMargins()
         } else if selection == .codex, let profile = model.preferences.provider(for: .codex)?.codexProfile {
             CodexProviderEditor(
                 model: model,
@@ -203,7 +204,8 @@ struct ProviderCatalogView: View {
                 }
             }
         }
-        .contentMargins(SettingsLayout.pageInset, for: .scrollContent)
+        .settingsPageContentMargins()
+        .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
     }
 
     private func text(_ key: String, _ fallback: String) -> String {
@@ -368,6 +370,7 @@ private struct CodexProviderEditor: View {
             }
         }
         .formStyle(.grouped)
+        .settingsPageContentMargins()
     }
 
     private func text(_ key: String, _ fallback: String) -> String {
@@ -446,6 +449,7 @@ private struct RemoteProviderEditor: View {
             HStack { Button(text("action.save", "Save"), action: onSave).buttonStyle(.borderedProminent); Button(text("action.cancel", "Cancel"), action: onCancel); Spacer(); Button(text("action.remove", "Remove"), role: .destructive, action: onDelete) }
         }
         .formStyle(.grouped)
+        .settingsPageContentMargins()
     }
 
     private func text(_ key: String, _ fallback: String) -> String {
