@@ -3,8 +3,8 @@ import Foundation
 import Observation
 import SwiftUI
 
-private enum WorkflowDestination: Hashable {
-    case edit(UUID, token: UUID)
+private enum WorkflowDestination {
+    case edit(UUID)
     case create(UUID)
 }
 
@@ -16,7 +16,7 @@ private struct WorkflowStepDraft: Identifiable, Equatable {
 @MainActor
 @Observable
 private final class WorkflowLibraryNavigationState {
-    var path: [WorkflowDestination] = []
+    var destination: WorkflowDestination?
     var draft: CleanupWorkflow?
     var originalDraft: CleanupWorkflow?
     var steps: [WorkflowStepDraft] = []
@@ -34,6 +34,7 @@ private final class WorkflowLibraryNavigationState {
         originalDraft = workflow
         steps = workflow.promptIDs.map { WorkflowStepDraft(id: UUID(), promptID: $0) }
         validationError = nil
+        destination = .edit(id)
     }
 
     func beginCreating(_ id: UUID) {
@@ -41,6 +42,7 @@ private final class WorkflowLibraryNavigationState {
         originalDraft = nil
         steps = []
         validationError = nil
+        destination = .create(id)
     }
 
     @discardableResult
@@ -66,14 +68,11 @@ private final class WorkflowLibraryNavigationState {
         steps.removeAll { $0.id == stepID }
     }
 
-    func move(stepID: UUID, before targetID: UUID) {
-        guard stepID != targetID,
-              let sourceIndex = steps.firstIndex(where: { $0.id == stepID }),
-              let targetIndex = steps.firstIndex(where: { $0.id == targetID }) else { return }
-        let step = steps.remove(at: sourceIndex)
-        let adjustedTarget = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex
-        steps.insert(step, at: adjustedTarget)
+    func closeEditor() {
+        destination = nil
+        validationError = nil
     }
+
 }
 
 struct WorkflowLibraryView: View {
@@ -82,11 +81,12 @@ struct WorkflowLibraryView: View {
 
     var body: some View {
         @Bindable var navigation = navigation
-        NavigationStack(path: $navigation.path) {
+        Group {
+            if let destination = navigation.destination {
+                WorkflowEditorPage(model: model, navigation: navigation, destination: destination)
+            } else {
             WorkflowListPage(model: model, navigation: navigation)
-                .navigationDestination(for: WorkflowDestination.self) { destination in
-                    WorkflowEditorPage(model: model, navigation: navigation, destination: destination)
-                }
+            }
         }
     }
 }
@@ -94,51 +94,88 @@ struct WorkflowLibraryView: View {
 private struct WorkflowListPage: View {
     @Bindable var model: AppStore
     @Bindable var navigation: WorkflowLibraryNavigationState
+    @State private var searchText = ""
+
+    private var filteredWorkflows: [CleanupWorkflow] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return model.preferences.cleanupWorkflows }
+        return model.preferences.cleanupWorkflows.filter {
+            $0.name.localizedCaseInsensitiveContains(query)
+        }
+    }
 
     var body: some View {
         let locale = model.interfaceLocale
         List {
-            if model.preferences.cleanupWorkflows.isEmpty {
+            SettingsLibraryHeader(
+                title: EntrevoixLocalization.text("settings.workflows", defaultValue: "Workflows", locale: locale),
+                description: EntrevoixLocalization.text(
+                    "workflows.description",
+                    defaultValue: "Combine prompts into a sequence for more elaborate cleanups.",
+                    locale: locale
+                ),
+                systemImage: "point.3.connected.trianglepath.dotted"
+            )
+
+            if filteredWorkflows.isEmpty {
                 ContentUnavailableView(
-                    EntrevoixLocalization.text("workflows.none", defaultValue: "No workflows saved", locale: locale),
+                    searchText.isEmpty
+                        ? EntrevoixLocalization.text("workflows.none", defaultValue: "No workflows saved", locale: locale)
+                        : EntrevoixLocalization.text("library.no_results", defaultValue: "No matching items", locale: locale),
                     systemImage: "point.3.connected.trianglepath.dotted"
                 )
             } else {
-                ForEach(model.preferences.cleanupWorkflows) { workflow in
+                ForEach(filteredWorkflows) { workflow in
                     Button {
                         navigation.beginEditing(workflow.id, model: model)
-                        navigation.path.append(.edit(workflow.id, token: UUID()))
                     } label: {
-                        HStack {
-                            Text(workflow.name)
-                            Spacer()
-                            if !workflow.isValid {
-                                Image(systemName: "exclamationmark.triangle")
-                                    .foregroundStyle(.orange)
-                                    .accessibilityLabel(EntrevoixLocalization.text("workflows.empty_warning", defaultValue: "Workflow needs at least one prompt", locale: locale))
-                            }
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(.tertiary)
-                        }
+                        SettingsLibraryRow(
+                            title: workflow.name,
+                            systemImage: "point.3.connected.trianglepath.dotted",
+                            detail: EntrevoixLocalization.workflowStepCount(workflow.promptIDs.count, locale: locale),
+                            status: workflowStatus(for: workflow, locale: locale),
+                            showsDisclosure: true
+                        )
                     }
                     .buttonStyle(.plain)
                     .contentShape(Rectangle())
+                    .listRowSeparator(workflow.id == filteredWorkflows.last?.id ? .hidden : .visible, edges: .bottom)
                 }
             }
         }
         .listStyle(.inset)
-        .navigationTitle(EntrevoixLocalization.text("settings.workflows", defaultValue: "Workflows", locale: locale))
+        .settingsPageContentMargins()
+        .scrollBounceBehavior(.always)
+        .scrollEdgeEffectStyle(.soft, for: .top)
+        .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
+        .searchable(
+            text: $searchText,
+            placement: .toolbar,
+            prompt: EntrevoixLocalization.text("library.search", defaultValue: "Search…", locale: locale)
+        )
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     let id = UUID()
                     navigation.beginCreating(id)
-                    navigation.path.append(.create(id))
                 } label: {
-                    Label(EntrevoixLocalization.text("workflows.add", defaultValue: "Add", locale: locale), systemImage: "plus")
+                    Label(
+                        EntrevoixLocalization.text("workflows.add", defaultValue: "Add", locale: locale),
+                        systemImage: "plus"
+                    )
                 }
             }
         }
+    }
+
+    private func workflowStatus(for workflow: CleanupWorkflow, locale: Locale) -> SettingsLibraryRowStatus? {
+        if !workflow.isValid {
+            return .warning(EntrevoixLocalization.text("workflows.needs_prompt", defaultValue: "Needs a prompt", locale: locale))
+        }
+        if model.promptLibrary.activeSelection == .workflow(workflow.id) {
+            return .active(EntrevoixLocalization.text("library.active", defaultValue: "Active", locale: locale))
+        }
+        return nil
     }
 }
 
@@ -159,7 +196,6 @@ private struct WorkflowEditorPage: View {
                     prompts: model.preferences.cleanupPrompts,
                     onAdd: navigation.add,
                     onRemove: navigation.remove,
-                    onMove: navigation.move,
                     locale: locale
                 )
             } else {
@@ -171,10 +207,18 @@ private struct WorkflowEditorPage: View {
         }
         .navigationTitle(isExisting ? EntrevoixLocalization.text("workflows.edit_title", defaultValue: "Edit Workflow", locale: locale) : EntrevoixLocalization.text("workflows.new_title", defaultValue: "New Workflow", locale: locale))
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button(action: navigation.closeEditor) {
+                    Label(
+                        EntrevoixLocalization.text("action.back", defaultValue: "Back", locale: locale),
+                        systemImage: "chevron.left"
+                    )
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button(EntrevoixLocalization.text("action.save", defaultValue: "Save", locale: locale)) {
                     guard navigation.save(model: model) else { return }
-                    navigation.path.removeLast()
+                    navigation.closeEditor()
                 }
             }
             if isExisting {
@@ -187,18 +231,12 @@ private struct WorkflowEditorPage: View {
                 }
             }
         }
-        .onAppear {
-            switch destination {
-            case .edit(let id, _): navigation.beginEditing(id, model: model)
-            case .create(let id): navigation.beginCreating(id)
-            }
-        }
         .alert(EntrevoixLocalization.text("workflows.delete_title", defaultValue: "Delete workflow?", locale: locale), isPresented: $showDeleteConfirmation) {
             Button(EntrevoixLocalization.text("workflows.delete", defaultValue: "Delete", locale: locale), role: .destructive) {
                 if let id = navigation.draft?.id {
                     model.deleteCleanupWorkflow(id: id)
                 }
-                navigation.path.removeLast()
+                navigation.closeEditor()
             }
             Button(EntrevoixLocalization.text("action.cancel", defaultValue: "Cancel", locale: locale), role: .cancel) { }
         }
@@ -217,63 +255,364 @@ private struct WorkflowEditor: View {
     let prompts: [CleanupPrompt]
     let onAdd: (UUID) -> Void
     let onRemove: (UUID) -> Void
-    let onMove: (UUID, UUID) -> Void
     let locale: Locale
+    @State private var isPromptPickerPresented = false
 
     var body: some View {
-        Form {
-            Section(EntrevoixLocalization.text("workflows.details", defaultValue: "Workflow details", locale: locale)) {
-                TextField(EntrevoixLocalization.text("field.name", defaultValue: "Name", locale: locale), text: $draft.name)
+        List {
+            Section {
+                WorkflowNameField(
+                    label: EntrevoixLocalization.text(
+                        "workflows.name",
+                        defaultValue: "Workflow name",
+                        locale: locale
+                    ),
+                    name: $draft.name
+                )
+                .padding(.vertical, 4)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
             }
             Section(EntrevoixLocalization.text("workflows.prompts", defaultValue: "Prompts", locale: locale)) {
                 if steps.isEmpty {
                     Label(EntrevoixLocalization.text("workflows.empty_warning", defaultValue: "Add at least one prompt before saving this workflow.", locale: locale), systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.orange)
                 }
-                ForEach(steps) { step in
-                    stepRow(step)
+                ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
+                    WorkflowStepCard(
+                        title: promptName(for: step.promptID),
+                        preview: promptPreview(for: step.promptID),
+                        systemImage: prompt(for: step.promptID)?.systemImageName ?? "questionmark",
+                        removeAccessibilityLabel: EntrevoixLocalization.text(
+                            "workflows.remove_prompt",
+                            defaultValue: "Remove Prompt",
+                            locale: locale
+                        ),
+                        reorderAccessibilityLabel: EntrevoixLocalization.text(
+                            "workflows.reorder_prompt",
+                            defaultValue: "Reorder Prompt",
+                            locale: locale
+                        ),
+                        onRemove: { onRemove(step.id) }
+                    )
+                    .padding(.vertical, 4)
+                    .listRowBackground(
+                        WorkflowStepRowBackground(
+                            showsConnectionFromPreviousStep: index > 0,
+                            showsConnectionToNextStep: true
+                        )
+                    )
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
                 }
-                Menu {
-                    ForEach(prompts) { prompt in
-                        Button(prompt.name) { onAdd(prompt.id) }
-                    }
+                .onMove(perform: moveSteps)
+                Button {
+                    isPromptPickerPresented = true
                 } label: {
-                    Label(EntrevoixLocalization.text("workflows.add_prompt", defaultValue: "Add Prompt", locale: locale), systemImage: "plus")
+                    WorkflowStepIconTile(systemImage: "plus")
                 }
+                .buttonStyle(.plain)
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .accessibilityLabel(
+                    EntrevoixLocalization.text(
+                        "workflows.add_prompt",
+                        defaultValue: "Add Prompt",
+                        locale: locale
+                    )
+                )
+                .help(EntrevoixLocalization.text("workflows.add_prompt", defaultValue: "Add Prompt", locale: locale))
+                .padding(.leading, WorkflowStepCardLayout.cardPadding)
+                .padding(.top, WorkflowStepCardLayout.addButtonTopSpacing)
                 .disabled(prompts.isEmpty)
+                .listRowBackground(
+                    WorkflowPromptAddRowBackground(
+                        showsConnectionFromPreviousStep: !steps.isEmpty
+                    )
+                )
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
             }
             if let validationError {
                 Label(validationError.message(locale: locale), systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
             }
         }
-        .formStyle(.grouped)
-        .padding()
+        .listStyle(.inset)
+        .settingsPageContentMargins()
+        .scrollEdgeEffectStyle(.soft, for: .top)
+        .sheet(isPresented: $isPromptPickerPresented) {
+            WorkflowPromptPickerSheet(
+                prompts: prompts,
+                locale: locale,
+                onAdd: onAdd
+            )
+        }
     }
 
-    private func stepRow(_ step: WorkflowStepDraft) -> some View {
-        HStack {
-            Text(promptName(for: step.promptID))
-            Spacer()
-            Button {
-                onRemove(step.id)
-            } label: {
-                Image(systemName: "minus.circle")
-                    .accessibilityLabel(EntrevoixLocalization.text("workflows.remove_prompt", defaultValue: "Remove Prompt", locale: locale))
-            }
-            .buttonStyle(.plain)
-        }
-        .draggable(step.id.uuidString)
-        .dropDestination(for: String.self) { items, _ in
-            guard let item = items.first, let sourceID = UUID(uuidString: item) else { return false }
-            onMove(sourceID, step.id)
-            return true
-        }
+    private func moveSteps(from source: IndexSet, to destination: Int) {
+        steps.move(fromOffsets: source, toOffset: destination)
+    }
+
+    private func prompt(for id: UUID) -> CleanupPrompt? {
+        prompts.first(where: { $0.id == id })
     }
 
     private func promptName(for id: UUID) -> String {
-        prompts.first(where: { $0.id == id })?.name
+        prompt(for: id)?.name
             ?? EntrevoixLocalization.text("workflows.missing_prompt", defaultValue: "Deleted prompt", locale: locale)
+    }
+
+    private func promptPreview(for id: UUID) -> String? {
+        guard let instructions = prompt(for: id)?.instructions else { return nil }
+        let preview = instructions
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+        return preview.isEmpty ? nil : preview
+    }
+}
+
+private struct WorkflowPromptPickerSheet: View {
+    let prompts: [CleanupPrompt]
+    let locale: Locale
+    let onAdd: (UUID) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List {
+            ForEach(prompts) { prompt in
+                Button {
+                    onAdd(prompt.id)
+                    dismiss()
+                } label: {
+                    WorkflowPromptPickerCard(prompt: prompt)
+                }
+                .buttonStyle(.plain)
+                .padding(.vertical, 4)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
+            }
+        }
+        .listStyle(.inset)
+        .settingsPageContentMargins()
+        .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
+        .navigationTitle(
+            EntrevoixLocalization.text(
+                "workflows.add_prompt",
+                defaultValue: "Add Prompt",
+                locale: locale
+            )
+        )
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(EntrevoixLocalization.text("action.cancel", defaultValue: "Cancel", locale: locale)) {
+                    dismiss()
+                }
+            }
+        }
+        .frame(minWidth: 360, minHeight: 300)
+    }
+}
+
+private struct WorkflowPromptPickerCard: View {
+    let prompt: CleanupPrompt
+
+    private var preview: String {
+        prompt.instructions
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            WorkflowStepIconTile(systemImage: prompt.systemImageName)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(prompt.name)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                if !preview.isEmpty {
+                    Text(preview)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(WorkflowStepCardLayout.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Color(nsColor: .quaternaryLabelColor).opacity(0.3),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+private struct WorkflowNameField: View {
+    let label: String
+    @Binding var name: String
+
+    var body: some View {
+        LabeledContent(label) {
+            TextField("", text: $name)
+                .textFieldStyle(.plain)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .accessibilityLabel(label)
+        }
+        .padding(WorkflowStepCardLayout.cardPadding)
+        .background(
+            Color(nsColor: .quaternaryLabelColor).opacity(0.3),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+    }
+}
+
+private enum WorkflowStepCardLayout {
+    static let listInset: CGFloat = 16
+    static let cardPadding: CGFloat = 12
+    static let iconTileSize: CGFloat = 32
+    static let connectorWidth: CGFloat = 2
+    static let connectorSegmentHeight: CGFloat = 4
+    static let addButtonTopSpacing: CGFloat = 4
+
+    static var connectorLeadingOffset: CGFloat {
+        listInset + cardPadding + (iconTileSize - connectorWidth) / 2
+    }
+}
+
+private struct WorkflowStepRowBackground: View {
+    let showsConnectionFromPreviousStep: Bool
+    let showsConnectionToNextStep: Bool
+
+    var body: some View {
+        Color.clear
+            .overlay(alignment: .topLeading) {
+                if showsConnectionFromPreviousStep {
+                    WorkflowStepConnection()
+                        .offset(x: WorkflowStepCardLayout.connectorLeadingOffset)
+                }
+            }
+            .overlay(alignment: .bottomLeading) {
+                if showsConnectionToNextStep {
+                    WorkflowStepConnection()
+                        .offset(x: WorkflowStepCardLayout.connectorLeadingOffset)
+                }
+            }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct WorkflowStepConnection: View {
+    var height = WorkflowStepCardLayout.connectorSegmentHeight
+
+    var body: some View {
+        Rectangle()
+            .fill(Color(nsColor: .separatorColor))
+            .frame(
+                width: WorkflowStepCardLayout.connectorWidth,
+                height: height
+            )
+    }
+}
+
+private struct WorkflowPromptAddRowBackground: View {
+    let showsConnectionFromPreviousStep: Bool
+
+    var body: some View {
+        Color.clear
+            .overlay(alignment: .topLeading) {
+                if showsConnectionFromPreviousStep {
+                    WorkflowStepConnection(height: WorkflowStepCardLayout.addButtonTopSpacing)
+                        .offset(x: WorkflowStepCardLayout.connectorLeadingOffset)
+                }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+private struct WorkflowStepIconTile: View {
+    let systemImage: String
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.accentColor.opacity(0.14))
+
+            Image(systemName: systemImage)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(Color.accentColor)
+        }
+        .frame(
+            width: WorkflowStepCardLayout.iconTileSize,
+            height: WorkflowStepCardLayout.iconTileSize
+        )
+    }
+}
+
+private struct WorkflowStepCard: View {
+    let title: String
+    let preview: String?
+    let systemImage: String
+    let removeAccessibilityLabel: String
+    let reorderAccessibilityLabel: String
+    let onRemove: () -> Void
+    @State private var isHovering = false
+    @FocusState private var isRemoveFocused: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            WorkflowStepIconTile(systemImage: systemImage)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                if let preview {
+                    Text(preview)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Image(systemName: "line.3.horizontal")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .frame(width: 20)
+                .accessibilityLabel(reorderAccessibilityLabel)
+                .help(reorderAccessibilityLabel)
+
+            Button(action: onRemove) {
+                Image(systemName: "minus.circle")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .opacity(isHovering || isRemoveFocused ? 1 : 0)
+            .focused($isRemoveFocused)
+            .accessibilityLabel(removeAccessibilityLabel)
+            .help(removeAccessibilityLabel)
+        }
+        .padding(WorkflowStepCardLayout.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Color(nsColor: .quaternaryLabelColor).opacity(0.3),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onHover { isHovering = $0 }
     }
 }
 

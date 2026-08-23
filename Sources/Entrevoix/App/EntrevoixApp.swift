@@ -77,10 +77,11 @@ struct EntrevoixApp: App {
                     .environment(model.dictationSession)
                     .environment(model.permissionsModel)
                     .environment(model.promptLibrary)
-                    .background(DockPresenceWindowFocus(controller: dockPresenceController))
+                    .background(DockPresenceWindowFocus(sceneID: "settings", controller: dockPresenceController))
             }
         }
         .defaultLaunchBehavior(.suppressed)
+        .windowToolbarStyle(.unified)
 
         Window(
             EntrevoixLocalization.text("window.logs", defaultValue: "Entrevoix Logs", locale: interfaceLocale),
@@ -89,7 +90,7 @@ struct EntrevoixApp: App {
             if let model = readyModel {
                 LogsView(logStore: model.logStore)
                     .environment(\.locale, model.interfaceLocale)
-                    .background(DockPresenceWindowFocus(controller: dockPresenceController))
+                    .background(DockPresenceWindowFocus(sceneID: "logs", controller: dockPresenceController))
             }
         }
         .defaultLaunchBehavior(.suppressed)
@@ -107,7 +108,7 @@ struct EntrevoixApp: App {
                     .environment(model.dictationSession)
                     .environment(model.permissionsModel)
                     .environment(model.promptLibrary)
-                    .background(DockPresenceWindowFocus(controller: dockPresenceController))
+                    .background(DockPresenceWindowFocus(sceneID: "onboarding", controller: dockPresenceController))
             }
         }
         .defaultLaunchBehavior(.suppressed)
@@ -117,7 +118,7 @@ struct EntrevoixApp: App {
             id: "startup-recovery"
         ) {
             StartupNoticeView(kind: .recovered, locale: interfaceLocale)
-                .background(DockPresenceWindowFocus(controller: dockPresenceController))
+                .background(DockPresenceWindowFocus(sceneID: "startup-recovery", controller: dockPresenceController))
         }
         .defaultLaunchBehavior(.suppressed)
     }
@@ -134,6 +135,10 @@ struct EntrevoixApp: App {
     private func openUserFacingWindow(id: String) {
         dockPresenceController.prepareForUserFacingWindow()
         openWindow(id: id)
+        Task { @MainActor in
+            await Task.yield()
+            dockPresenceController.focusUserFacingWindow(id: id)
+        }
     }
 
     private func iconName(for state: DictationState?) -> String {
