@@ -9,7 +9,7 @@ struct GeneralSettingsView: View {
     var body: some View {
         let locale = model.interfaceLocale
         Form {
-            Section(EntrevoixLocalization.text("settings.general", defaultValue: "General", locale: locale)) {
+            Section {
                 Picker(EntrevoixLocalization.text("settings.interface_language", defaultValue: "Interface language", locale: locale), selection: Binding(
                     get: { model.preferences.interfaceLanguage },
                     set: { model.setInterfaceLanguage($0) }
@@ -275,7 +275,7 @@ struct STTSettingsView: View {
     var body: some View {
         let locale = model.interfaceLocale
         Form {
-            Section(EntrevoixLocalization.text("settings.stt", defaultValue: "STT Transcription", locale: locale)) {
+            Section {
                 Picker(EntrevoixLocalization.text("field.provider", defaultValue: "Provider", locale: locale), selection: Binding(get: { model.preferences.selectedSTTProviderID }, set: { model.setSTTProvider($0) })) {
                     Text(EntrevoixLocalization.text("provider.none_selected", defaultValue: "No provider selected", locale: locale)).tag(Optional<ProviderIdentifier>.none)
                     ForEach(model.providersSortedForDisplay.filter { entry in entry.id == .apple || entry.remoteProfile?.stt != nil }) { entry in
@@ -560,7 +560,7 @@ struct CleanupSettingsView: View {
     var body: some View {
         let locale = model.interfaceLocale
         Form {
-            Section(EntrevoixLocalization.text("settings.ttt", defaultValue: "TTT Cleanup", locale: locale)) {
+            Section {
                 Picker(EntrevoixLocalization.text("field.provider", defaultValue: "Provider", locale: locale), selection: Binding(get: { model.preferences.selectedTTTProviderID }, set: { model.setTTTProvider($0) })) {
                     Text(EntrevoixLocalization.text("provider.none_selected", defaultValue: "No provider selected", locale: locale)).tag(Optional<ProviderIdentifier>.none)
                     ForEach(model.providersSortedForDisplay.filter { entry in entry.id == .apple || entry.id == .codex || entry.remoteProfile?.ttt != nil }) { entry in
