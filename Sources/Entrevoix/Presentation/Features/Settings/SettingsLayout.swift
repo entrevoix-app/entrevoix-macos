@@ -4,8 +4,9 @@ enum SettingsLayout {
     static let pageInset: CGFloat = 12
     static let toolbarContentInset: CGFloat = 8
     static let cardContentInset: CGFloat = 16
-    static let groupedFormTopInset: CGFloat = 24
     static let groupedFormHorizontalInset: CGFloat = 20
+    static let promptInstructionsEditorHeight: CGFloat = 320
+    static let promptInstructionsEditorInset: CGFloat = 8
     static let gridSpacing: CGFloat = 8
     static let sectionSpacing: CGFloat = 12
     static let iconTileSize: CGFloat = 48
@@ -22,11 +23,6 @@ extension View {
         contentMargins(
             .horizontal,
             SettingsLayout.pageInset - SettingsLayout.groupedFormHorizontalInset,
-            for: .scrollContent
-        )
-        .contentMargins(
-            .top,
-            SettingsLayout.toolbarContentInset - SettingsLayout.groupedFormTopInset,
             for: .scrollContent
         )
     }

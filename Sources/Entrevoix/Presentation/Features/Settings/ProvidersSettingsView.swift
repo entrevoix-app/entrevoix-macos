@@ -21,17 +21,8 @@ struct ProvidersSettingsView: View {
                     onAddRemote: begin
                 )
             } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    Button(action: showCatalog) {
-                        Label(text("provider.back_to_catalog", "All providers"), systemImage: "chevron.left")
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, SettingsLayout.pageInset)
-                    .padding(.top, SettingsLayout.toolbarContentInset)
-
-                    detail
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
+                detail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .onChange(of: selection) { _, id in
@@ -53,6 +44,32 @@ struct ProvidersSettingsView: View {
         } message: {
             Text(text("provider.remove_message", "Its API key is removed first. Selected STT and TTT capabilities will be deselected."))
         }
+        .toolbar {
+            if !isShowingCatalog {
+                ToolbarItem(placement: .navigation) {
+                    Button(action: showCatalog) {
+                        Label(text("provider.back_to_catalog", "All providers"), systemImage: "chevron.left")
+                    }
+                }
+            }
+            if !isShowingCatalog, selection != nil {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    if draft != nil {
+                        Button(text("action.save", "Save"), action: save)
+                    }
+                    Menu {
+                        Button(role: .destructive) {
+                            showDeleteConfirmation = true
+                        } label: {
+                            Label(text("action.remove", "Remove"), systemImage: "trash")
+                        }
+                    } label: {
+                        Label(text("provider.actions", "Provider actions"), systemImage: "ellipsis.circle")
+                    }
+                    .menuStyle(.button)
+                }
+            }
+        }
     }
 
     @ViewBuilder private var detail: some View {
@@ -63,20 +80,13 @@ struct ProvidersSettingsView: View {
                     Label(text("provider.apple_assets", "Speech availability is checked before recording. Download required speech assets from the STT settings."), systemImage: "waveform")
                     Label(text("provider.apple_intelligence", "Apple Intelligence availability is checked before cleanup."), systemImage: "apple.intelligence")
                 }
-                Section {
-                    Button(text("provider.remove_apple", "Remove Apple provider"), role: .destructive) { showDeleteConfirmation = true }
-                }
             }
             .formStyle(.grouped)
-            .settingsPageContentMargins()
+            .settingsGroupedFormContentMargins()
         } else if selection == .codex, let profile = model.preferences.provider(for: .codex)?.codexProfile {
-            CodexProviderEditor(
-                model: model,
-                profile: profile,
-                onDelete: { showDeleteConfirmation = true }
-            )
+            CodexProviderEditor(model: model, profile: profile)
         } else if let draft {
-            RemoteProviderEditor(model: model, draft: binding(for: draft), apiKey: $draftKey, validation: validation, onLoadModels: { model.loadModels(for: $0) }, onSave: save, onCancel: cancel, onDelete: { showDeleteConfirmation = true })
+            RemoteProviderEditor(model: model, draft: binding(for: draft), apiKey: $draftKey, validation: validation, onLoadModels: { model.loadModels(for: $0) }, onSave: save)
         } else {
             ContentUnavailableView(text("provider.none_selected", "No provider selected"), systemImage: "network", description: Text(text("provider.empty_description", "Add a local Apple or remote provider to begin.")))
         }
@@ -128,10 +138,6 @@ struct ProvidersSettingsView: View {
         guard let draft else { return }
         validation = model.saveRemoteProvider(draft, apiKey: draftKey)
         if validation.isEmpty { showCatalog() }
-    }
-
-    private func cancel() {
-        showCatalog()
     }
 
     private func text(_ key: String, _ fallback: String) -> String {
@@ -346,7 +352,6 @@ private struct ProviderIcon: View {
 private struct CodexProviderEditor: View {
     @Bindable var model: ProviderStore
     let profile: CodexProviderProfile
-    let onDelete: () -> Void
 
     var body: some View {
         Form {
@@ -365,12 +370,9 @@ private struct CodexProviderEditor: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section {
-                Button(text("action.remove", "Remove"), role: .destructive, action: onDelete)
-            }
         }
         .formStyle(.grouped)
-        .settingsPageContentMargins()
+        .settingsGroupedFormContentMargins()
     }
 
     private func text(_ key: String, _ fallback: String) -> String {
@@ -406,8 +408,6 @@ private struct RemoteProviderEditor: View {
     let validation: [ProviderValidationIssue]
     let onLoadModels: (RemoteProviderProfile) -> Void
     let onSave: () -> Void
-    let onCancel: () -> Void
-    let onDelete: () -> Void
 
     var body: some View {
         Form {
@@ -446,10 +446,9 @@ private struct RemoteProviderEditor: View {
                 }
             }
             if let first = validation.first { Label(first.localizedProviderValidationTitle(locale: model.interfaceLocale), systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
-            HStack { Button(text("action.save", "Save"), action: onSave).buttonStyle(.borderedProminent); Button(text("action.cancel", "Cancel"), action: onCancel); Spacer(); Button(text("action.remove", "Remove"), role: .destructive, action: onDelete) }
         }
         .formStyle(.grouped)
-        .settingsPageContentMargins()
+        .settingsGroupedFormContentMargins()
     }
 
     private func text(_ key: String, _ fallback: String) -> String {

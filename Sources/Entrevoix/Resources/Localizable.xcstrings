@@ -20,6 +20,7 @@
       }
     },
     "action.back" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Back" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Retour" } } } },
+    "provider.actions" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Provider actions" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Actions du fournisseur" } } } },
     "action.quit" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Quit" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Quitter" } } } },
     "action.remove" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer" } } } },
     "action.discard" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Discard" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Ignorer" } } } },
@@ -576,6 +577,8 @@
     "menu.prompt_disabled" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "TTT cleanup disabled" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Nettoyage TTT désactivé" } } } },
     "prompts.active" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Active prompt" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Prompt actif" } } } },
     "prompts.add" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Add" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Ajouter" } } } },
+    "prompts.actions" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Prompt actions" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Actions du prompt" } } } },
+    "prompts.back_to_library" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "All prompts" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Tous les prompts" } } } },
     "prompts.count" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "%lld prompts" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "%lld prompts" } } } },
     "prompts.delete" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer" } } } },
     "prompts.delete_title" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete prompt?" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer le prompt ?" } } } },

@@ -701,16 +701,16 @@ final class AppStoreTests: XCTestCase {
 
         state.beginEditing(id, model: context.model)
         state.openPrompt(id)
-        let firstDestination = state.path.last
-        state.path.removeLast()
+        let firstDestination = state.destination
+        state.resetTransientState()
         state.openPrompt(id)
-        XCTAssertNotEqual(state.path.last, firstDestination)
+        XCTAssertNotEqual(state.destination, firstDestination)
         state.pendingAction = .back
         state.showUnsavedConfirmation = true
 
         state.resetTransientState()
 
-        XCTAssertTrue(state.path.isEmpty)
+        XCTAssertNil(state.destination)
         XCTAssertNil(state.draft)
         XCTAssertNil(state.originalDraft)
         XCTAssertNil(state.pendingAction)

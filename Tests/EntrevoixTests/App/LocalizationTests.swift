@@ -130,12 +130,15 @@ final class LocalizationTests: XCTestCase {
             "updates.channel.confirm_action",
             "provider.openai_codex",
             "provider.add_another",
+            "provider.actions",
             "provider.back_to_catalog",
             "provider.configured_title",
             "action.configure",
             "provider.models_load_failed",
             "codex.connect",
             "codex.ttt_only",
+            "prompts.actions",
+            "prompts.back_to_library",
             "error.codex_not_connected"
         ] {
             let entry = try XCTUnwrap(strings[key] as? [String: Any])

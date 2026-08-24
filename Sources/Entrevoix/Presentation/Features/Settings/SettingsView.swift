@@ -56,8 +56,7 @@ struct SettingsView: View {
                 } else {
                     selection = newSelection
                     if newSelection != .prompts {
-                        promptNavigation.discard()
-                        promptNavigation.path.removeAll()
+                        promptNavigation.resetTransientState()
                     }
                 }
             }
