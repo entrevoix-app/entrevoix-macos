@@ -169,6 +169,8 @@ extension DictationFailure {
             )
         case .audioUnavailable:
             return localized("failure.no_audio", "No audio file was produced.", locale: locale)
+        case .noSpeechDetected:
+            return localized("failure.no_speech", "No speech was detected.", locale: locale)
         case .sessionUnavailable:
             return localized("failure.session_not_found", "Recording session not found.", locale: locale)
         }
@@ -214,6 +216,8 @@ extension ConnectionTestState {
                 message.localizedText(locale: locale)
             case .insufficientAudio:
                 localized("connection_test.insufficient_audio", "Record at least one short phrase before running the test.", locale: locale)
+            case .noSpeechDetected:
+                localized("failure.no_speech", "No speech was detected.", locale: locale)
             }
         }
     }

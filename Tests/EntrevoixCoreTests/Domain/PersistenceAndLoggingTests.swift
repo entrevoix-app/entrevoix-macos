@@ -60,10 +60,12 @@ final class PersistenceAndLoggingTests: XCTestCase {
         XCTAssertEqual(preferences.sttFavoriteLanguages, [.french, .english])
         XCTAssertEqual(preferences.dictationDictionary, ["Symfony", "CapRover"])
         XCTAssertEqual(preferences.dictationDictionaryPrompt, "Symfony, CapRover")
+        XCTAssertTrue(preferences.trimLeadingAndTrailingSilence)
 
         preferences.sttLanguage = .french
         let microphone = AudioInputDeviceReference(uid: "usb-microphone", name: "USB Microphone")
         preferences.audioInputSelection = .device(microphone)
+        preferences.trimLeadingAndTrailingSilence = false
         preferences.dictationDictionary = ["Symfony", "CapRover"]
         preferences.triggerMode = .toggle
         preferences.cleanupFormat = .chatCompletions
@@ -87,6 +89,7 @@ final class PersistenceAndLoggingTests: XCTestCase {
         )
 
         XCTAssertEqual(preferences.audioInputSelection, .systemDefault)
+        XCTAssertTrue(preferences.trimLeadingAndTrailingSilence)
         XCTAssertEqual(preferences.schemaVersion, 12)
     }
 

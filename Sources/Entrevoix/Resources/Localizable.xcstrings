@@ -250,6 +250,12 @@
         "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Aucun fichier audio n’a été produit." } }
       }
     },
+    "failure.no_speech" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No speech was detected." } },
+        "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Aucun son vocal détecté." } }
+      }
+    },
     "failure.session_not_found" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Recording session not found." } },
@@ -497,6 +503,7 @@
     "settings.launch_at_login" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Launch Entrevoix at login" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Lancer Entrevoix à l’ouverture de session" } } } },
     "settings.permissions" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Permissions" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Autorisations" } } } },
     "settings.play_feedback" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Play a sound when dictation starts and ends" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Jouer un son au début et à la fin de la dictée" } } } },
+    "settings.trim_silence" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove silence before and after speech" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer le silence avant et après la parole" } } } },
     "settings.sidebar.application" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Application" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Application" } } } },
     "settings.sidebar.customization" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Customization" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Personnalisation" } } } },
     "settings.sidebar.processing" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Processing" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Traitement" } } } },

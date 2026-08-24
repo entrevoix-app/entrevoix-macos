@@ -63,6 +63,20 @@ final class PendingPermissionRecorder: AudioRecording {
     func deleteCapture(at url: URL) {}
 }
 
+actor AudioCaptureTrimmerSpy: AudioCaptureTrimming {
+    private(set) var calls: [(URL, String?)] = []
+    var result: AudioCaptureTrimResult
+
+    init(result: AudioCaptureTrimResult) {
+        self.result = result
+    }
+
+    func trimLeadingAndTrailingSilence(in audioURL: URL, language: String?) async -> AudioCaptureTrimResult {
+        calls.append((audioURL, language))
+        return result
+    }
+}
+
 @MainActor
 final class PermissionSpy: MicrophonePermissionRequesting {
     var permission = true

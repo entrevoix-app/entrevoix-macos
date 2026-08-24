@@ -32,6 +32,16 @@ struct GeneralSettingsView: View {
             }
 
             Section(EntrevoixLocalization.text("settings.audio_input", defaultValue: "Audio Input", locale: locale)) {
+                Toggle(
+                    EntrevoixLocalization.text(
+                        "settings.trim_silence",
+                        defaultValue: "Remove silence before and after speech",
+                        locale: locale
+                    ),
+                    isOn: $model.preferences.trimLeadingAndTrailingSilence
+                )
+                .toggleStyle(.checkbox)
+
                 Picker(
                     EntrevoixLocalization.text("field.audio_input", defaultValue: "Microphone", locale: locale),
                     selection: Binding(

@@ -5,6 +5,7 @@ public enum ConnectionTestFailure: Equatable, Sendable {
     case microphonePermissionDenied
     case recordingFailed(message: UserFacingErrorMessage)
     case insufficientAudio
+    case noSpeechDetected
     case transcriptionFailed(message: UserFacingErrorMessage)
 }
 
@@ -40,6 +41,7 @@ public struct ConnectionTestSnapshot: Equatable, Sendable {
 @MainActor
 public final class ConnectionTestCoordinator {
     private let audioRecorder: any AudioRecording
+    private let audioCaptureTrimmer: any AudioCaptureTrimming
     private let microphonePermission: any MicrophonePermissionRequesting
     private let transcriber: any SpeechTranscribing
     private let logger: any LogWriting
@@ -59,19 +61,23 @@ public final class ConnectionTestCoordinator {
     private var sessionLease: SessionLease?
     private var startedAt: Date?
     private var task: Task<Void, Never>?
+    private var trimLeadingAndTrailingSilence = true
+    private var activeRequest: TranscriptionRequest?
 
     public convenience init(
         audioRecorder: any AudioRecording,
+        audioCaptureTrimmer: any AudioCaptureTrimming = PassthroughAudioCaptureTrimmer(),
         microphonePermission: any MicrophonePermissionRequesting,
         transcriber: any SpeechTranscribing,
         logger: any LogWriting,
         sessionArbiter: (any SessionArbitrating)? = nil
     ) {
-        self.init(audioRecorder: audioRecorder, microphonePermission: microphonePermission, transcriber: transcriber, logger: logger, now: Date.init, sessionArbiter: sessionArbiter)
+        self.init(audioRecorder: audioRecorder, audioCaptureTrimmer: audioCaptureTrimmer, microphonePermission: microphonePermission, transcriber: transcriber, logger: logger, now: Date.init, sessionArbiter: sessionArbiter)
     }
 
     public init(
         audioRecorder: any AudioRecording,
+        audioCaptureTrimmer: any AudioCaptureTrimming = PassthroughAudioCaptureTrimmer(),
         microphonePermission: any MicrophonePermissionRequesting,
         transcriber: any SpeechTranscribing,
         logger: any LogWriting,
@@ -79,6 +85,7 @@ public final class ConnectionTestCoordinator {
         sessionArbiter: (any SessionArbitrating)? = nil
     ) {
         self.audioRecorder = audioRecorder
+        self.audioCaptureTrimmer = audioCaptureTrimmer
         self.microphonePermission = microphonePermission
         self.transcriber = transcriber
         self.logger = logger
@@ -88,7 +95,8 @@ public final class ConnectionTestCoordinator {
 
     public func start(
         request: TranscriptionRequest? = nil,
-        audioInput: AudioInputSelection = .systemDefault
+        audioInput: AudioInputSelection = .systemDefault,
+        trimLeadingAndTrailingSilence: Bool = true
     ) {
         guard state.isInactive else { return }
         if let request {
@@ -105,6 +113,8 @@ public final class ConnectionTestCoordinator {
         }
         let sessionID = UUID()
         self.sessionID = sessionID
+        activeRequest = request
+        self.trimLeadingAndTrailingSilence = trimLeadingAndTrailingSilence
         state = .requestingPermission
         task?.cancel()
         task = Task { [weak self] in
@@ -164,21 +174,39 @@ public final class ConnectionTestCoordinator {
             releaseSessionLease()
             return
         }
+        let request = activeRequest ?? request
         state = .testing
         logger.log("Connection test recording ended")
         onEvent?(.recordingStopped)
         task?.cancel()
         task = Task { [weak self] in
             guard let self else { return }
+            var captureURL = audioURL
             defer {
-                self.audioRecorder.deleteCapture(at: audioURL)
+                self.audioRecorder.deleteCapture(at: captureURL)
                 if self.sessionID == sessionID { self.sessionID = nil }
                 self.releaseSessionLease()
+                self.activeRequest = nil
             }
             do {
+                if self.trimLeadingAndTrailingSilence {
+                    switch await self.audioCaptureTrimmer.trimLeadingAndTrailingSilence(in: captureURL, language: request.language) {
+                    case .unchanged:
+                        break
+                    case .trimmed(let trimmedURL):
+                        captureURL = trimmedURL
+                    case .noSpeechDetected:
+                        guard self.sessionID == sessionID else { return }
+                        self.sessionID = nil
+                        self.state = .failed(.noSpeechDetected)
+                        self.onEvent?(.failed)
+                        return
+                    }
+                }
+                try Task.checkCancellation()
                 let host = request.configuration.endpointURL?.host ?? "configured endpoint"
                 self.logger.log("Testing STT connection with \(host)")
-                let text = try await self.transcriber.transcribe(audioURL: audioURL, request: request)
+                let text = try await self.transcriber.transcribe(audioURL: captureURL, request: request)
                 guard self.sessionID == sessionID else { return }
                 self.state = .succeeded(characterCount: text.count)
                 self.logger.log("STT connection test succeeded (\(text.count) chars)")
@@ -202,6 +230,7 @@ public final class ConnectionTestCoordinator {
         task?.cancel()
         task = nil
         startedAt = nil
+        activeRequest = nil
         audioRecorder.cancel()
         state = .idle
         releaseSessionLease()

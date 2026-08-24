@@ -22,6 +22,7 @@ public final class DictationCoordinator {
     private var recordingStartedAt: Date?
     private var frozenRequest: DictationRequest?
     private var frozenAudioInput: AudioInputSelection = .systemDefault
+    private var frozenTrimLeadingAndTrailingSilence = true
     private let now: () -> Date
     private let sleep: (Duration) async throws -> Void
 
@@ -59,7 +60,8 @@ public final class DictationCoordinator {
 
     public func startRecording(
         request: DictationRequest? = nil,
-        audioInput: AudioInputSelection = .systemDefault
+        audioInput: AudioInputSelection = .systemDefault,
+        trimLeadingAndTrailingSilence: Bool = true
     ) {
         guard state == .idle else { return }
         if let sessionArbiter = dependencies.sessionArbiter {
@@ -71,6 +73,7 @@ public final class DictationCoordinator {
         activeSessionID = sessionID
         frozenRequest = request
         frozenAudioInput = audioInput
+        frozenTrimLeadingAndTrailingSilence = trimLeadingAndTrailingSilence
         state = .requestingPermission
         permissionTask = Task { [weak self] in
             guard let self else { return }
@@ -172,8 +175,9 @@ public final class DictationCoordinator {
         transcriptionTask?.cancel()
         transcriptionTask = Task { [weak self] in
             guard let self else { return }
+            var captureURL = audioURL
             defer {
-                self.dependencies.audioRecorder.deleteCapture(at: audioURL)
+                self.dependencies.audioRecorder.deleteCapture(at: captureURL)
                 if self.activeSessionID == sessionID {
                     self.activeSessionID = nil
                     self.lastAudioURL = nil
@@ -181,7 +185,26 @@ public final class DictationCoordinator {
                 self.endSession()
             }
             do {
-                let sizeInBytes = self.dependencies.audioRecorder.captureSize(at: audioURL)
+                if self.frozenTrimLeadingAndTrailingSilence {
+                    switch await self.dependencies.audioCaptureTrimmer.trimLeadingAndTrailingSilence(
+                        in: captureURL,
+                        language: frozenRequest.transcription.language
+                    ) {
+                    case .unchanged:
+                        break
+                    case .trimmed(let trimmedURL):
+                        captureURL = trimmedURL
+                        self.lastAudioURL = trimmedURL
+                    case .noSpeechDetected:
+                        guard self.activeSessionID == sessionID else { return }
+                        self.activeSessionID = nil
+                        self.lastAudioURL = nil
+                        self.state = .error(.noSpeechDetected)
+                        return
+                    }
+                }
+                try Task.checkCancellation()
+                let sizeInBytes = self.dependencies.audioRecorder.captureSize(at: captureURL)
                 let sizeInKilobytes = Double(sizeInBytes) / 1024
                 switch frozenRequest.transcription.target {
                 case .remote:
@@ -190,7 +213,7 @@ public final class DictationCoordinator {
                 case .apple:
                     self.dependencies.logger.log("Processing audio locally with Apple Speech")
                 }
-                let text = try await self.dependencies.transcriber.transcribe(audioURL: audioURL, request: frozenRequest.transcription)
+                let text = try await self.dependencies.transcriber.transcribe(audioURL: captureURL, request: frozenRequest.transcription)
                 guard self.activeSessionID == sessionID else { return }
                 self.dependencies.logger.log("Received \(text.count) chars transcription")
                 var finalText = text
