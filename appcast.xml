@@ -3,6 +3,16 @@
     <channel>
         <title>Entrevoix</title>
         <item>
+            <title>0.5.0-dev.1</title>
+            <pubDate>Mon, 24 Aug 2026 15:54:06 +0000</pubDate>
+            <sparkle:channel>dev</sparkle:channel>
+            <sparkle:version>18</sparkle:version>
+            <sparkle:shortVersionString>0.5.0-dev.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/entrevoix-app/entrevoix-macos/releases/download/v0.5.0-dev.1/Entrevoix-0.5.0-dev.1-macos.dmg" length="4564204" type="application/octet-stream" sparkle:edSignature="PqiIiFm3PkhDTm82p0+HsGquv+EE3pk7vDAlW0hvlIy/hkrD3WtA3Lu49JOLq2SKOWep/VcJzeUWS4P19Up1DQ=="/>
+        </item>
+        <item>
             <title>0.4.0</title>
             <pubDate>Mon, 24 Aug 2026 13:41:41 +0000</pubDate>
             <sparkle:version>17</sparkle:version>
