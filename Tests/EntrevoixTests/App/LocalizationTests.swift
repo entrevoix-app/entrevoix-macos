@@ -64,6 +64,7 @@ final class LocalizationTests: XCTestCase {
             "settings.duck_other_audio",
             "settings.audio_input",
             "settings.trim_silence",
+            "settings.reduce_internal_pauses",
             "settings.trim_resource_checking",
             "settings.trim_resource_download",
             "settings.trim_resource_downloading",

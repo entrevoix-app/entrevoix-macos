@@ -11,9 +11,11 @@ public enum AudioCaptureTrimResult: Sendable, Equatable {
 /// leading and trailing silence. Implementations must leave the source capture
 /// intact when returning `.unchanged`.
 public protocol AudioCaptureTrimming: Sendable {
-    func trimLeadingAndTrailingSilence(
+    func processCapture(
         in audioURL: URL,
-        language: String?
+        language: String?,
+        removeEdgeSilence: Bool,
+        reduceInternalPauses: Bool
     ) async -> AudioCaptureTrimResult
 }
 
@@ -52,9 +54,11 @@ public struct UnavailableAudioCaptureTrimmingResourceManager: AudioCaptureTrimmi
 public struct PassthroughAudioCaptureTrimmer: AudioCaptureTrimming {
     public init() {}
 
-    public func trimLeadingAndTrailingSilence(
+    public func processCapture(
         in audioURL: URL,
-        language: String?
+        language: String?,
+        removeEdgeSilence: Bool,
+        reduceInternalPauses: Bool
     ) async -> AudioCaptureTrimResult {
         .unchanged(audioURL)
     }

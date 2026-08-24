@@ -45,6 +45,19 @@ struct GeneralSettingsView: View {
                 )
                 .toggleStyle(.checkbox)
 
+                Toggle(
+                    EntrevoixLocalization.text(
+                        "settings.reduce_internal_pauses",
+                        defaultValue: "Reduce pauses",
+                        locale: locale
+                    ),
+                    isOn: Binding(
+                        get: { model.preferences.reduceLongInternalPauses },
+                        set: { model.setReduceLongInternalPauses($0) }
+                    )
+                )
+                .toggleStyle(.checkbox)
+
                 if model.preferences.trimLeadingAndTrailingSilence {
                     AudioCaptureTrimmingResourceControl(model: model, locale: locale)
                 }

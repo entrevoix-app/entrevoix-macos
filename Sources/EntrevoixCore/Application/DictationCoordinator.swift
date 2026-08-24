@@ -23,6 +23,7 @@ public final class DictationCoordinator {
     private var frozenRequest: DictationRequest?
     private var frozenAudioInput: AudioInputSelection = .systemDefault
     private var frozenTrimLeadingAndTrailingSilence = true
+    private var frozenReduceLongInternalPauses = false
     private let now: () -> Date
     private let sleep: (Duration) async throws -> Void
 
@@ -61,7 +62,8 @@ public final class DictationCoordinator {
     public func startRecording(
         request: DictationRequest? = nil,
         audioInput: AudioInputSelection = .systemDefault,
-        trimLeadingAndTrailingSilence: Bool = true
+        trimLeadingAndTrailingSilence: Bool = true,
+        reduceLongInternalPauses: Bool = false
     ) {
         guard state == .idle else { return }
         if let sessionArbiter = dependencies.sessionArbiter {
@@ -74,6 +76,7 @@ public final class DictationCoordinator {
         frozenRequest = request
         frozenAudioInput = audioInput
         frozenTrimLeadingAndTrailingSilence = trimLeadingAndTrailingSilence
+        frozenReduceLongInternalPauses = reduceLongInternalPauses
         state = .requestingPermission
         permissionTask = Task { [weak self] in
             guard let self else { return }
@@ -185,10 +188,12 @@ public final class DictationCoordinator {
                 self.endSession()
             }
             do {
-                if self.frozenTrimLeadingAndTrailingSilence {
-                    switch await self.dependencies.audioCaptureTrimmer.trimLeadingAndTrailingSilence(
+                if self.frozenTrimLeadingAndTrailingSilence || self.frozenReduceLongInternalPauses {
+                    switch await self.dependencies.audioCaptureTrimmer.processCapture(
                         in: captureURL,
-                        language: frozenRequest.transcription.language
+                        language: frozenRequest.transcription.language,
+                        removeEdgeSilence: self.frozenTrimLeadingAndTrailingSilence,
+                        reduceInternalPauses: self.frozenReduceLongInternalPauses
                     ) {
                     case .unchanged:
                         break

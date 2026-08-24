@@ -144,6 +144,30 @@ final class DictationCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testReducingInternalPausesProcessesCaptureWithoutEdgeTrimming() async throws {
+        let recorder = RecorderSpy()
+        recorder.stopURL = try temporaryAudioFile()
+        let trimmer = AudioCaptureTrimmerSpy(result: .unchanged(recorder.stopURL!))
+        let context = makeContext(recorder: recorder, trimmer: trimmer)
+        let request = testRequest()
+
+        context.coordinator.startRecording(
+            request: request,
+            trimLeadingAndTrailingSilence: false,
+            reduceLongInternalPauses: true
+        )
+        await waitUntil("recording") { context.coordinator.state == .recording }
+        context.clock.advance(by: 1)
+        context.coordinator.stopRecording(request: request)
+        await waitUntil("completion") { context.coordinator.state == .idle }
+
+        let calls = await trimmer.calls
+        let call = try XCTUnwrap(calls.first)
+        XCTAssertFalse(call.removeEdgeSilence)
+        XCTAssertTrue(call.reduceInternalPauses)
+    }
+
+    @MainActor
     func testRecordingForwardsTheFrozenAudioInputToTheRecorder() async {
         let recorder = RecorderSpy()
         let context = makeContext(recorder: recorder)

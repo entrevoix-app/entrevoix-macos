@@ -1,7 +1,7 @@
 import Foundation
 
 public struct AppPreferences: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 14
+    public static let currentSchemaVersion = 15
     public static let defaultCleanupPromptID = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
 
     public var schemaVersion: Int
@@ -14,6 +14,7 @@ public struct AppPreferences: Codable, Equatable, Sendable {
     public var dictationDictionary: [String]
     public var audioInputSelection: AudioInputSelection
     public var trimLeadingAndTrailingSilence: Bool
+    public var reduceLongInternalPauses: Bool
     public var triggerMode: TriggerMode
     public var cleanupEnabled: Bool
     public var cleanupPrompts: [CleanupPrompt]
@@ -42,6 +43,7 @@ public struct AppPreferences: Codable, Equatable, Sendable {
         dictationDictionary: [String] = [],
         audioInputSelection: AudioInputSelection = .systemDefault,
         trimLeadingAndTrailingSilence: Bool = true,
+        reduceLongInternalPauses: Bool = false,
         triggerMode: TriggerMode = .pushToTalk,
         cleanupEnabled: Bool = false,
         cleanupPrompt: String = AppPreferences.defaultCleanupPrompt,
@@ -69,6 +71,7 @@ public struct AppPreferences: Codable, Equatable, Sendable {
         self.dictationDictionary = Self.normalizedDictationDictionary(dictationDictionary)
         self.audioInputSelection = audioInputSelection
         self.trimLeadingAndTrailingSilence = trimLeadingAndTrailingSilence
+        self.reduceLongInternalPauses = reduceLongInternalPauses
         self.triggerMode = triggerMode
         self.cleanupEnabled = cleanupEnabled && selectedTTTProviderID != nil
         self.cleanupPrompts = cleanupPrompts
@@ -208,7 +211,7 @@ public struct AppPreferences: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, interfaceLanguage, providerCatalog, selectedSTTProviderID, selectedTTTProviderID
-        case sttLanguage, sttFavoriteLanguages, dictationDictionary, audioInputSelection, trimLeadingAndTrailingSilence, triggerMode, cleanupEnabled
+        case sttLanguage, sttFavoriteLanguages, dictationDictionary, audioInputSelection, trimLeadingAndTrailingSilence, reduceLongInternalPauses, triggerMode, cleanupEnabled
         case cleanupPrompts, cleanupWorkflows, activeCleanupSelection, activeCleanupPromptID
         case cleanupPrompt, cleanupPromptMode, cleanupFailurePolicy
         case outputMode, launchAtLogin, playFeedbackSounds, updateChannel, hasCompletedOnboarding
@@ -247,6 +250,7 @@ public struct AppPreferences: Codable, Equatable, Sendable {
         dictationDictionary = Self.normalizedDictationDictionary(try c.decodeIfPresent([String].self, forKey: .dictationDictionary) ?? [])
         audioInputSelection = try c.decodeIfPresent(AudioInputSelection.self, forKey: .audioInputSelection) ?? .systemDefault
         trimLeadingAndTrailingSilence = try c.decodeIfPresent(Bool.self, forKey: .trimLeadingAndTrailingSilence) ?? true
+        reduceLongInternalPauses = try c.decodeIfPresent(Bool.self, forKey: .reduceLongInternalPauses) ?? false
         triggerMode = try c.decodeIfPresent(TriggerMode.self, forKey: .triggerMode) ?? .pushToTalk
         cleanupEnabled = try c.decodeIfPresent(Bool.self, forKey: .cleanupEnabled) ?? true
         cleanupPrompt = try c.decodeIfPresent(String.self, forKey: .cleanupPrompt) ?? Self.defaultCleanupPrompt
@@ -281,7 +285,7 @@ public struct AppPreferences: Codable, Equatable, Sendable {
         try c.encodeIfPresent(selectedSTTProviderID, forKey: .selectedSTTProviderID)
         try c.encodeIfPresent(selectedTTTProviderID, forKey: .selectedTTTProviderID)
         try c.encode(sttLanguage, forKey: .sttLanguage); try c.encode(sttFavoriteLanguages, forKey: .sttFavoriteLanguages)
-        try c.encode(dictationDictionary, forKey: .dictationDictionary); try c.encode(audioInputSelection, forKey: .audioInputSelection); try c.encode(trimLeadingAndTrailingSilence, forKey: .trimLeadingAndTrailingSilence); try c.encode(triggerMode, forKey: .triggerMode)
+        try c.encode(dictationDictionary, forKey: .dictationDictionary); try c.encode(audioInputSelection, forKey: .audioInputSelection); try c.encode(trimLeadingAndTrailingSilence, forKey: .trimLeadingAndTrailingSilence); try c.encode(reduceLongInternalPauses, forKey: .reduceLongInternalPauses); try c.encode(triggerMode, forKey: .triggerMode)
         try c.encode(cleanupEnabled, forKey: .cleanupEnabled); try c.encode(cleanupPrompts, forKey: .cleanupPrompts)
         try c.encode(cleanupWorkflows, forKey: .cleanupWorkflows)
         try c.encode(activeCleanupSelection, forKey: .activeCleanupSelection)

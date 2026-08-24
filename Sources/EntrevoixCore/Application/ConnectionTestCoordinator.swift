@@ -62,6 +62,7 @@ public final class ConnectionTestCoordinator {
     private var startedAt: Date?
     private var task: Task<Void, Never>?
     private var trimLeadingAndTrailingSilence = true
+    private var reduceLongInternalPauses = false
     private var activeRequest: TranscriptionRequest?
 
     public convenience init(
@@ -96,7 +97,8 @@ public final class ConnectionTestCoordinator {
     public func start(
         request: TranscriptionRequest? = nil,
         audioInput: AudioInputSelection = .systemDefault,
-        trimLeadingAndTrailingSilence: Bool = true
+        trimLeadingAndTrailingSilence: Bool = true,
+        reduceLongInternalPauses: Bool = false
     ) {
         guard state.isInactive else { return }
         if let request {
@@ -115,6 +117,7 @@ public final class ConnectionTestCoordinator {
         self.sessionID = sessionID
         activeRequest = request
         self.trimLeadingAndTrailingSilence = trimLeadingAndTrailingSilence
+        self.reduceLongInternalPauses = reduceLongInternalPauses
         state = .requestingPermission
         task?.cancel()
         task = Task { [weak self] in
@@ -189,8 +192,13 @@ public final class ConnectionTestCoordinator {
                 self.activeRequest = nil
             }
             do {
-                if self.trimLeadingAndTrailingSilence {
-                    switch await self.audioCaptureTrimmer.trimLeadingAndTrailingSilence(in: captureURL, language: request.language) {
+                if self.trimLeadingAndTrailingSilence || self.reduceLongInternalPauses {
+                    switch await self.audioCaptureTrimmer.processCapture(
+                        in: captureURL,
+                        language: request.language,
+                        removeEdgeSilence: self.trimLeadingAndTrailingSilence,
+                        reduceInternalPauses: self.reduceLongInternalPauses
+                    ) {
                     case .unchanged:
                         break
                     case .trimmed(let trimmedURL):

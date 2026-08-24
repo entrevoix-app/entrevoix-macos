@@ -106,6 +106,12 @@ final class AppStore {
         }
     }
 
+    func setReduceLongInternalPauses(_ enabled: Bool) {
+        guard preferences.reduceLongInternalPauses != enabled else { return }
+        preferences.reduceLongInternalPauses = enabled
+        savePreferences()
+    }
+
     func refreshAudioCaptureTrimmingResourceState() {
         providerStore.refreshAudioCaptureTrimmingResourceState()
     }

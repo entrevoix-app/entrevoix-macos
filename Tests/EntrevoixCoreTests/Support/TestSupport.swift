@@ -64,15 +64,32 @@ final class PendingPermissionRecorder: AudioRecording {
 }
 
 actor AudioCaptureTrimmerSpy: AudioCaptureTrimming {
-    private(set) var calls: [(URL, String?)] = []
+    struct Call: Sendable {
+        let audioURL: URL
+        let language: String?
+        let removeEdgeSilence: Bool
+        let reduceInternalPauses: Bool
+    }
+
+    private(set) var calls: [Call] = []
     var result: AudioCaptureTrimResult
 
     init(result: AudioCaptureTrimResult) {
         self.result = result
     }
 
-    func trimLeadingAndTrailingSilence(in audioURL: URL, language: String?) async -> AudioCaptureTrimResult {
-        calls.append((audioURL, language))
+    func processCapture(
+        in audioURL: URL,
+        language: String?,
+        removeEdgeSilence: Bool,
+        reduceInternalPauses: Bool
+    ) async -> AudioCaptureTrimResult {
+        calls.append(Call(
+            audioURL: audioURL,
+            language: language,
+            removeEdgeSilence: removeEdgeSilence,
+            reduceInternalPauses: reduceInternalPauses
+        ))
         return result
     }
 }

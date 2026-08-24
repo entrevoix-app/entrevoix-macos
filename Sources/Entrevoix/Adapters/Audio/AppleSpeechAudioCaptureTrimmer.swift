@@ -9,10 +9,14 @@ import Speech
 /// here: unavailable analysis deliberately leaves the recording unchanged.
 actor AppleSpeechAudioCaptureTrimmer: AudioCaptureTrimming {
     private static let retainedPadding: TimeInterval = 0.1
+    private static let longPauseThreshold: TimeInterval = 1
+    private static let reducedPauseDuration: TimeInterval = 0.5
 
-    func trimLeadingAndTrailingSilence(
+    func processCapture(
         in audioURL: URL,
-        language: String?
+        language: String?,
+        removeEdgeSilence: Bool,
+        reduceInternalPauses: Bool
     ) async -> AudioCaptureTrimResult {
         let requestedLocale = Locale(identifier: language ?? Locale.current.identifier)
         guard let locale = await DictationTranscriber.supportedLocale(equivalentTo: requestedLocale) else {
@@ -35,17 +39,21 @@ actor AppleSpeechAudioCaptureTrimmer: AudioCaptureTrimming {
                 try await analyzer.finalizeAndFinishThroughEndOfInput()
             }
             let ranges = try await speechRanges
-            guard let bounds = Self.trimBounds(for: ranges, file: file) else {
+            guard let plan = Self.rewritePlan(
+                for: ranges,
+                file: file,
+                removeEdgeSilence: removeEdgeSilence,
+                reduceInternalPauses: reduceInternalPauses
+            ) else {
                 return .noSpeechDetected
             }
-            guard bounds.startFrame > 0 || bounds.endFrame < file.length else {
+            guard !plan.isIdentity(for: file.length) else {
                 return .unchanged(audioURL)
             }
-            let trimmedURL = try Self.writeTrimmedFile(
+            let trimmedURL = try Self.writeProcessedFile(
                 from: file,
                 sourceURL: audioURL,
-                startFrame: bounds.startFrame,
-                endFrame: bounds.endFrame
+                plan: plan
             )
             return .trimmed(trimmedURL)
         } catch is CancellationError {
@@ -91,16 +99,68 @@ actor AppleSpeechAudioCaptureTrimmer: AudioCaptureTrimming {
         return (startFrame, endFrame)
     }
 
-    static func writeTrimmedFile(
+    static func rewritePlan(
+        for speechRanges: [CMTimeRange],
+        file: AVAudioFile,
+        removeEdgeSilence: Bool,
+        reduceInternalPauses: Bool
+    ) -> AudioCaptureRewritePlan? {
+        guard file.length > 0, file.fileFormat.sampleRate > 0 else { return nil }
+        let ranges = speechRanges
+            .filter { !$0.isEmpty && $0.start.isNumeric && $0.end.isNumeric }
+            .sorted { $0.start < $1.start }
+        guard let first = ranges.first, let last = ranges.last else { return nil }
+
+        let sampleRate = file.fileFormat.sampleRate
+        let initialFrame = removeEdgeSilence
+            ? max(0, AVAudioFramePosition(((first.start.seconds - retainedPadding) * sampleRate).rounded(.down)))
+            : 0
+        let finalFrame = removeEdgeSilence
+            ? min(file.length, AVAudioFramePosition(((last.end.seconds + retainedPadding) * sampleRate).rounded(.up)))
+            : file.length
+
+        guard reduceInternalPauses else {
+            return AudioCaptureRewritePlan(sourceRanges: [initialFrame..<finalFrame], insertedSilentFrames: 0)
+        }
+
+        var sourceRanges: [Range<AVAudioFramePosition>] = []
+        var segmentStart = initialFrame
+        var previousEnd = first.end.seconds
+        for range in ranges.dropFirst() {
+            let gap = range.start.seconds - previousEnd
+            if gap > longPauseThreshold {
+                let segmentEnd = min(
+                    file.length,
+                    AVAudioFramePosition((previousEnd * sampleRate).rounded(.up))
+                )
+                if segmentEnd > segmentStart { sourceRanges.append(segmentStart..<segmentEnd) }
+                segmentStart = max(
+                    0,
+                    AVAudioFramePosition((range.start.seconds * sampleRate).rounded(.down))
+                )
+            }
+            previousEnd = max(previousEnd, range.end.seconds)
+        }
+        if finalFrame > segmentStart { sourceRanges.append(segmentStart..<finalFrame) }
+        guard !sourceRanges.isEmpty else { return nil }
+        return AudioCaptureRewritePlan(
+            sourceRanges: sourceRanges,
+            insertedSilentFrames: sourceRanges.count > 1
+                ? AVAudioFramePosition((reducedPauseDuration * sampleRate).rounded())
+                : 0
+        )
+    }
+
+    static func writeProcessedFile(
         from source: AVAudioFile,
         sourceURL: URL,
-        startFrame: AVAudioFramePosition,
-        endFrame: AVAudioFramePosition
+        plan: AudioCaptureRewritePlan
     ) throws -> URL {
         let temporaryURL = sourceURL
             .deletingPathExtension()
             .appendingPathExtension("trimmed-\(UUID().uuidString).wav")
-        let frameCapacity = AVAudioFrameCount(min(endFrame - startFrame, 8_192))
+        let maximumRangeLength = plan.sourceRanges.map { $0.upperBound - $0.lowerBound }.max() ?? 0
+        let frameCapacity = AVAudioFrameCount(min(maximumRangeLength, 8_192))
         guard frameCapacity > 0 else { throw CocoaError(.fileReadUnknown) }
 
         do {
@@ -110,18 +170,16 @@ actor AppleSpeechAudioCaptureTrimmer: AudioCaptureTrimming {
                 commonFormat: source.processingFormat.commonFormat,
                 interleaved: source.processingFormat.isInterleaved
             )
-            source.framePosition = startFrame
-            var remaining = endFrame - startFrame
-            while remaining > 0 {
-                let count = AVAudioFrameCount(min(remaining, AVAudioFramePosition(frameCapacity)))
-                guard let buffer = AVAudioPCMBuffer(
-                    pcmFormat: source.processingFormat,
-                    frameCapacity: count
-                ) else { throw CocoaError(.fileReadUnknown) }
-                try source.read(into: buffer, frameCount: count)
-                guard buffer.frameLength > 0 else { throw CocoaError(.fileReadUnknown) }
-                try output.write(from: buffer)
-                remaining -= AVAudioFramePosition(buffer.frameLength)
+            for (index, range) in plan.sourceRanges.enumerated() {
+                try write(source: source, range: range, to: output, frameCapacity: frameCapacity)
+                if index < plan.sourceRanges.index(before: plan.sourceRanges.endIndex) {
+                    try writeSilence(
+                        frameCount: plan.insertedSilentFrames,
+                        format: source.processingFormat,
+                        to: output,
+                        frameCapacity: frameCapacity
+                    )
+                }
             }
             output.close()
             try FileManager.default.removeItem(at: sourceURL)
@@ -130,6 +188,56 @@ actor AppleSpeechAudioCaptureTrimmer: AudioCaptureTrimming {
             try? FileManager.default.removeItem(at: temporaryURL)
             throw error
         }
+    }
+
+    private static func write(
+        source: AVAudioFile,
+        range: Range<AVAudioFramePosition>,
+        to output: AVAudioFile,
+        frameCapacity: AVAudioFrameCount
+    ) throws {
+        source.framePosition = range.lowerBound
+        var remaining = range.upperBound - range.lowerBound
+        while remaining > 0 {
+            let count = AVAudioFrameCount(min(remaining, AVAudioFramePosition(frameCapacity)))
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: source.processingFormat, frameCapacity: count) else {
+                throw CocoaError(.fileReadUnknown)
+            }
+            try source.read(into: buffer, frameCount: count)
+            guard buffer.frameLength > 0 else { throw CocoaError(.fileReadUnknown) }
+            try output.write(from: buffer)
+            remaining -= AVAudioFramePosition(buffer.frameLength)
+        }
+    }
+
+    private static func writeSilence(
+        frameCount: AVAudioFramePosition,
+        format: AVAudioFormat,
+        to output: AVAudioFile,
+        frameCapacity: AVAudioFrameCount
+    ) throws {
+        var remaining = frameCount
+        while remaining > 0 {
+            let count = AVAudioFrameCount(min(remaining, AVAudioFramePosition(frameCapacity)))
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: count) else {
+                throw CocoaError(.fileReadUnknown)
+            }
+            buffer.frameLength = count
+            for audioBuffer in UnsafeMutableAudioBufferListPointer(buffer.mutableAudioBufferList) {
+                if let data = audioBuffer.mData { memset(data, 0, Int(audioBuffer.mDataByteSize)) }
+            }
+            try output.write(from: buffer)
+            remaining -= AVAudioFramePosition(count)
+        }
+    }
+}
+
+struct AudioCaptureRewritePlan: Equatable {
+    let sourceRanges: [Range<AVAudioFramePosition>]
+    let insertedSilentFrames: AVAudioFramePosition
+
+    func isIdentity(for sourceLength: AVAudioFramePosition) -> Bool {
+        sourceRanges == [0..<sourceLength] && insertedSilentFrames == 0
     }
 }
 

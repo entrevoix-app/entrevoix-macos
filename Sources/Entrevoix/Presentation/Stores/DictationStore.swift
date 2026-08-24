@@ -120,7 +120,8 @@ final class DictationStore {
         coordinator.startRecording(
             request: request,
             audioInput: providerStore.preferences.audioInputSelection,
-            trimLeadingAndTrailingSilence: providerStore.preferences.trimLeadingAndTrailingSilence
+            trimLeadingAndTrailingSilence: providerStore.preferences.trimLeadingAndTrailingSilence,
+            reduceLongInternalPauses: providerStore.preferences.reduceLongInternalPauses
         )
     }
 

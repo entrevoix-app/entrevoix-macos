@@ -44,7 +44,8 @@ final class ConnectionTestStore {
         coordinator.start(
             request: request,
             audioInput: providerStore.preferences.audioInputSelection,
-            trimLeadingAndTrailingSilence: providerStore.preferences.trimLeadingAndTrailingSilence
+            trimLeadingAndTrailingSilence: providerStore.preferences.trimLeadingAndTrailingSilence,
+            reduceLongInternalPauses: providerStore.preferences.reduceLongInternalPauses
         )
     }
 
