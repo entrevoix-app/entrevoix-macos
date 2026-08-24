@@ -1,5 +1,7 @@
 import Foundation
+import EntrevoixAppleAdapters
 import EntrevoixCore
+import EntrevoixOpenAIAdapters
 
 @MainActor
 enum CompositionRoot {

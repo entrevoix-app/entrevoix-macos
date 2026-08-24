@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+@testable import EntrevoixOpenAIAdapters
 @testable import Entrevoix
 
 final class NetworkSafetyTests: XCTestCase {

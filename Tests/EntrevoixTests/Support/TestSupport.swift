@@ -1,6 +1,8 @@
 import Foundation
 import XCTest
 import EntrevoixCore
+@testable import EntrevoixAppleAdapters
+import EntrevoixOpenAIAdapters
 @testable import Entrevoix
 
 enum AppStubError: LocalizedError, LogSafeError, Equatable, Sendable {
@@ -382,7 +384,7 @@ final class AppDate {
     func advance(by interval: TimeInterval) { value.addTimeInterval(interval) }
 }
 
-final class MemoryKeychainAccess: KeychainAccessing, @unchecked Sendable {
+final class MemoryKeychainAccess: CodexKeychainAccessing, EntrevoixAppleAdapters.KeychainAccessing, @unchecked Sendable {
     var storage: [String: Data] = [:]
     var readError: (any Error)?
     var upsertError: (any Error)?

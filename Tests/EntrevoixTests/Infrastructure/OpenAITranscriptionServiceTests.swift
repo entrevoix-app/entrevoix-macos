@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 import EntrevoixCore
+@testable import EntrevoixOpenAIAdapters
 @testable import Entrevoix
 
 final class OpenAITranscriptionServiceTests: XCTestCase {

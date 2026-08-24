@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-import EntrevoixCore
+@testable import EntrevoixCore
 @testable import Entrevoix
 
 final class AppStoreTests: XCTestCase {
