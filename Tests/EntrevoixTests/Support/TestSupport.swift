@@ -63,6 +63,63 @@ final class AppPendingPermissionRecorder: AudioRecording {
     func deleteCapture(at url: URL) {}
 }
 
+actor AppAudioCaptureTrimmerSpy: AudioCaptureTrimming {
+    struct Call: Sendable {
+        let audioURL: URL
+        let language: String?
+        let removeEdgeSilence: Bool
+        let reduceInternalPauses: Bool
+    }
+
+    private(set) var calls: [Call] = []
+    var result: AudioCaptureTrimResult
+
+    init(result: AudioCaptureTrimResult) {
+        self.result = result
+    }
+
+    func processCapture(
+        in audioURL: URL,
+        language: String?,
+        removeEdgeSilence: Bool,
+        reduceInternalPauses: Bool
+    ) async -> AudioCaptureTrimResult {
+        calls.append(Call(
+            audioURL: audioURL,
+            language: language,
+            removeEdgeSilence: removeEdgeSilence,
+            reduceInternalPauses: reduceInternalPauses
+        ))
+        return result
+    }
+}
+
+actor AppAudioCaptureTrimmingResourceManagerSpy: AudioCaptureTrimmingResourceManaging {
+    private(set) var preparationLocales: [Locale] = []
+    private(set) var downloadLocales: [Locale] = []
+    var state: AudioCaptureTrimmingResourceState
+    var downloadResult: Result<Void, AppStubError>
+
+    init(
+        state: AudioCaptureTrimmingResourceState,
+        downloadResult: Result<Void, AppStubError> = .success(())
+    ) {
+        self.state = state
+        self.downloadResult = downloadResult
+    }
+
+    func preparationState(for requestedLocale: Locale) async -> AudioCaptureTrimmingResourceState {
+        preparationLocales.append(requestedLocale)
+        return state
+    }
+
+    func download(for requestedLocale: Locale) async throws {
+        downloadLocales.append(requestedLocale)
+        try downloadResult.get()
+        state = .ready
+    }
+}
+
 @MainActor
 final class AudioInputDeviceCatalogSpy: AudioInputDeviceDiscovering {
     var onInputDevicesChanged: (() -> Void)?

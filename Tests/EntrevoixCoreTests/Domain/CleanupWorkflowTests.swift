@@ -57,7 +57,7 @@ struct CleanupWorkflowTests {
 
         let migrated = PreferencesMigrator.migrate(preferences, localizedDefaultPrompt: "Prompt localisé")
 
-        #expect(migrated.schemaVersion == 13)
+        #expect(migrated.schemaVersion == 15)
         #expect(migrated.cleanupPrompts.first?.id == AppPreferences.defaultCleanupPromptID)
         #expect(migrated.cleanupPrompts.first?.instructions == "Prompt localisé")
         #expect(migrated.activeCleanupSelection == .prompt(AppPreferences.defaultCleanupPromptID))

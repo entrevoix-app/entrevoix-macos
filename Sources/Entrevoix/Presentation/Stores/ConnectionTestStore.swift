@@ -43,7 +43,9 @@ final class ConnectionTestStore {
               let request = providerStore.makeTranscriptionRequest() else { return }
         coordinator.start(
             request: request,
-            audioInput: providerStore.preferences.audioInputSelection
+            audioInput: providerStore.preferences.audioInputSelection,
+            trimLeadingAndTrailingSilence: providerStore.preferences.trimLeadingAndTrailingSilence,
+            reduceLongInternalPauses: providerStore.preferences.reduceLongInternalPauses
         )
     }
 

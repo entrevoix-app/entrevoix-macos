@@ -26,7 +26,7 @@ final class UpdateChannelTests: XCTestCase {
 
         let missing = try JSONDecoder().decode(AppPreferences.self, from: Data("{\"schemaVersion\":10}".utf8))
         XCTAssertEqual(missing.updateChannel, .stable)
-        XCTAssertEqual(AppPreferences.currentSchemaVersion, 13)
+        XCTAssertEqual(AppPreferences.currentSchemaVersion, 15)
     }
 
     func testSchemaTenPreferencesMigrateToCurrentSchemaWithStableChannel() {

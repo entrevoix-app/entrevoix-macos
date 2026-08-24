@@ -110,6 +110,35 @@ final class ConnectionTestCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testNoSpeechCaptureDoesNotReachTheConnectionTestTranscriber() async throws {
+        let recorder = AppRecorderSpy()
+        recorder.stopURL = try appTemporaryFile()
+        let trimmer = AppAudioCaptureTrimmerSpy(result: .noSpeechDetected)
+        let transcriber = AppTranscriberSpy()
+        let clock = AppDate()
+        let model = ConnectionTestCoordinator(
+            audioRecorder: recorder,
+            audioCaptureTrimmer: trimmer,
+            microphonePermission: PermissionSpy(),
+            transcriber: transcriber,
+            logger: AppLogStore(),
+            now: { clock.value }
+        )
+
+        model.start()
+        await appWaitUntil("recording") { model.state == .recording }
+        clock.advance(by: 1)
+        model.finish(request: TranscriptionRequest(configuration: .openAITranscription, apiKey: "secret", prompt: nil, language: "fr"))
+        await appWaitUntil("no speech") { model.state == .failed(.noSpeechDetected) }
+
+        let trimCallCount = await trimmer.calls.count
+        let transcriptionCalls = await transcriber.calls
+        XCTAssertEqual(trimCallCount, 1)
+        XCTAssertTrue(transcriptionCalls.isEmpty)
+        XCTAssertEqual(recorder.deleteCount, 1)
+    }
+
+    @MainActor
     func testTranscriptionFailureIsTypedAndSafe() async throws {
         let recorder = AppRecorderSpy()
         recorder.stopURL = try appTemporaryFile()

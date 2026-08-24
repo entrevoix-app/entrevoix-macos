@@ -52,6 +52,9 @@ final class AppStore {
     var discoveredModels: [UUID: [String]] { providerStore.discoveredModels }
     var modelDiscoveryError: String? { providerStore.modelDiscoveryErrors.values.first }
     var codexConnectionState: CodexConnectionState { providerStore.codexConnectionState }
+    var audioCaptureTrimmingResourceState: AudioCaptureTrimmingResourceState {
+        providerStore.audioCaptureTrimmingResourceState
+    }
 
     var interfaceLocale: Locale {
         _ = interfaceLanguageRevision
@@ -91,6 +94,30 @@ final class AppStore {
         if changed {
             savePreferences()
         }
+        providerStore.refreshAudioCaptureTrimmingResourceState()
+    }
+
+    func setTrimLeadingAndTrailingSilence(_ enabled: Bool) {
+        guard preferences.trimLeadingAndTrailingSilence != enabled else { return }
+        preferences.trimLeadingAndTrailingSilence = enabled
+        savePreferences()
+        if enabled {
+            providerStore.refreshAudioCaptureTrimmingResourceState()
+        }
+    }
+
+    func setReduceLongInternalPauses(_ enabled: Bool) {
+        guard preferences.reduceLongInternalPauses != enabled else { return }
+        preferences.reduceLongInternalPauses = enabled
+        savePreferences()
+    }
+
+    func refreshAudioCaptureTrimmingResourceState() {
+        providerStore.refreshAudioCaptureTrimmingResourceState()
+    }
+
+    func downloadAudioCaptureTrimmingResource() {
+        providerStore.downloadAudioCaptureTrimmingResource()
     }
 
     func setSTTFavoriteLanguage(_ language: TranscriptionLanguage, enabled: Bool) {
@@ -215,6 +242,7 @@ final class AppStore {
             modelCatalog: dependencies.modelCatalog,
             codexCredentialsStore: dependencies.codexCredentials,
             codexAuthenticator: dependencies.codexAuthenticator,
+            audioCaptureTrimmingResources: dependencies.audioCaptureTrimmingResources,
             logStore: dependencies.logStore
         )
         self.providerStore = providerStore

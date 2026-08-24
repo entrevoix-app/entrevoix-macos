@@ -1,10 +1,44 @@
 import AVFoundation
+import CoreMedia
 import EntrevoixCore
+import Speech
 import XCTest
 @testable import Entrevoix
 
 @MainActor
 final class AudioRecorderTests: XCTestCase {
+    func testDeleteCaptureRemovesCompletedWAV() throws {
+        let url = try appTemporaryFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let recorder = AudioRecorder(logger: AppLogStore(), captureEngineFactory: AudioCaptureEngineFactorySpy(engines: []))
+
+        recorder.deleteCapture(at: url)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    func testSpeechTrimUsesWordTimeRangesInsteadOfFinalizationRange() {
+        var spoken = AttributedString("speech")
+        spoken[AttributeScopes.SpeechAttributes.TimeRangeAttribute.self] = CMTimeRange(
+            start: CMTime(seconds: 1, preferredTimescale: 1_000),
+            duration: CMTime(seconds: 2, preferredTimescale: 1_000)
+        )
+        var finalizationMarker = AttributedString(" ")
+        finalizationMarker[AttributeScopes.SpeechAttributes.TimeRangeAttribute.self] = CMTimeRange(
+            start: CMTime(seconds: 8, preferredTimescale: 1_000),
+            duration: .zero
+        )
+        spoken.append(finalizationMarker)
+
+        XCTAssertEqual(
+            AppleSpeechAudioCaptureTrimmer.wordTimeRanges(in: spoken),
+            [CMTimeRange(
+                start: CMTime(seconds: 1, preferredTimescale: 1_000),
+                duration: CMTime(seconds: 2, preferredTimescale: 1_000)
+            )]
+        )
+    }
+
     func testCaptureEngineIsReusedWithoutVoiceProcessing() throws {
         let engine = AudioCaptureEngineSpy()
         let factory = AudioCaptureEngineFactorySpy(engines: [engine])
@@ -173,6 +207,83 @@ final class AudioRecorderTests: XCTestCase {
             max(maximum, abs(samples[frame]))
         }
         XCTAssertGreaterThan(maximum, 0.01)
+    }
+
+    func testSpeechTrimBoundsKeepOneHundredMillisecondsOfPaddingAndRewriteWAV() throws {
+        let format = try XCTUnwrap(AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 16_000,
+            channels: 1,
+            interleaved: false
+        ))
+        let sourceURL = try appTemporaryFile()
+        try FileManager.default.removeItem(at: sourceURL)
+        defer { try? FileManager.default.removeItem(at: sourceURL) }
+        let source = try AVAudioFile(forWriting: sourceURL, settings: format.settings)
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 32_000))
+        buffer.frameLength = 32_000
+        try source.write(from: buffer)
+        source.close()
+
+        let input = try AVAudioFile(forReading: sourceURL)
+        let speech = CMTimeRange(start: CMTime(seconds: 0.5, preferredTimescale: 16_000), duration: CMTime(seconds: 0.7, preferredTimescale: 16_000))
+        let bounds = try XCTUnwrap(AppleSpeechAudioCaptureTrimmer.trimBounds(for: [speech], file: input))
+
+        XCTAssertEqual(bounds.startFrame, 6_400)
+        XCTAssertEqual(bounds.endFrame, 20_800)
+        let trimmedURL = try AppleSpeechAudioCaptureTrimmer.writeProcessedFile(
+            from: input,
+            sourceURL: sourceURL,
+            plan: AudioCaptureRewritePlan(
+                sourceRanges: [bounds.startFrame..<bounds.endFrame],
+                insertedSilentFrames: 0
+            )
+        )
+        defer { try? FileManager.default.removeItem(at: trimmedURL) }
+        let trimmed = try AVAudioFile(forReading: trimmedURL)
+        XCTAssertEqual(trimmed.fileFormat.sampleRate, 16_000)
+        XCTAssertEqual(trimmed.fileFormat.channelCount, 1)
+        XCTAssertEqual(trimmed.length, 14_400)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: sourceURL.path))
+    }
+
+    func testSpeechTrimReducesOnlyInternalPausesLongerThanOneSecond() throws {
+        let format = try XCTUnwrap(AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 16_000,
+            channels: 1,
+            interleaved: false
+        ))
+        let sourceURL = try appTemporaryFile()
+        try FileManager.default.removeItem(at: sourceURL)
+        defer { try? FileManager.default.removeItem(at: sourceURL) }
+        let source = try AVAudioFile(forWriting: sourceURL, settings: format.settings)
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 96_000))
+        buffer.frameLength = 96_000
+        try source.write(from: buffer)
+        source.close()
+
+        let input = try AVAudioFile(forReading: sourceURL)
+        let speech = [
+            CMTimeRange(start: CMTime(seconds: 1, preferredTimescale: 16_000), duration: CMTime(seconds: 1, preferredTimescale: 16_000)),
+            CMTimeRange(start: CMTime(seconds: 4, preferredTimescale: 16_000), duration: CMTime(seconds: 1, preferredTimescale: 16_000))
+        ]
+        let plan = try XCTUnwrap(AppleSpeechAudioCaptureTrimmer.rewritePlan(
+            for: speech,
+            file: input,
+            removeEdgeSilence: true,
+            reduceInternalPauses: true
+        ))
+
+        XCTAssertEqual(plan.sourceRanges, [14_400..<32_000, 64_000..<81_600])
+        XCTAssertEqual(plan.insertedSilentFrames, 8_000)
+        let processedURL = try AppleSpeechAudioCaptureTrimmer.writeProcessedFile(
+            from: input,
+            sourceURL: sourceURL,
+            plan: plan
+        )
+        defer { try? FileManager.default.removeItem(at: processedURL) }
+        XCTAssertEqual(try AVAudioFile(forReading: processedURL).length, 43_200)
     }
 
 }

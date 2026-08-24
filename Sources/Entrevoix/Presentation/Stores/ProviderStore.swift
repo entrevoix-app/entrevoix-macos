@@ -10,31 +10,38 @@ final class ProviderStore {
     private let modelCatalog: any RemoteModelDiscovering
     private let codexCredentialsStore: any CodexCredentialsStoring
     private let codexAuthenticator: any CodexAuthenticating
+    private let audioCaptureTrimmingResources: any AudioCaptureTrimmingResourceManaging
     private let logStore: AppLogStore
 
     private(set) var discoveredModels: [UUID: [String]] = [:]
     private(set) var modelDiscoveryErrors: [UUID: String] = [:]
     private(set) var codexConnectionState: CodexConnectionState = .disconnected
+    private(set) var audioCaptureTrimmingResourceState: AudioCaptureTrimmingResourceState = .checking
 
     @ObservationIgnored private var credentialStateTask: Task<Void, Never>?
     @ObservationIgnored private var authenticationTask: Task<Void, Never>?
     @ObservationIgnored private var authenticationGeneration = UUID()
     @ObservationIgnored private var modelDiscoveryTasks: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var modelDiscoveryGenerations: [UUID: UUID] = [:]
+    @ObservationIgnored private var audioCaptureTrimmingResourceTask: Task<Void, Never>?
+    @ObservationIgnored private var audioCaptureTrimmingResourceGeneration = UUID()
 
     init(
         preferencesStore: PreferencesStore,
         modelCatalog: any RemoteModelDiscovering,
         codexCredentialsStore: any CodexCredentialsStoring,
         codexAuthenticator: any CodexAuthenticating,
+        audioCaptureTrimmingResources: any AudioCaptureTrimmingResourceManaging,
         logStore: AppLogStore
     ) {
         self.preferencesStore = preferencesStore
         self.modelCatalog = modelCatalog
         self.codexCredentialsStore = codexCredentialsStore
         self.codexAuthenticator = codexAuthenticator
+        self.audioCaptureTrimmingResources = audioCaptureTrimmingResources
         self.logStore = logStore
         refreshCodexConnectionState()
+        refreshAudioCaptureTrimmingResourceState()
     }
 
     var preferences: AppPreferences {
@@ -78,6 +85,7 @@ final class ProviderStore {
             preferences.sttLanguage = .english
         }
         preferencesStore.savePreferencesImmediately()
+        refreshAudioCaptureTrimmingResourceState()
     }
 
     func setTTTProvider(_ id: ProviderIdentifier?) {
@@ -216,6 +224,49 @@ final class ProviderStore {
 
     func modelDiscoveryError(for providerID: UUID) -> String? {
         modelDiscoveryErrors[providerID]
+    }
+
+    func refreshAudioCaptureTrimmingResourceState() {
+        let locale = trimmingResourceLocale
+        let generation = UUID()
+        audioCaptureTrimmingResourceGeneration = generation
+        audioCaptureTrimmingResourceTask?.cancel()
+        audioCaptureTrimmingResourceState = .checking
+        audioCaptureTrimmingResourceTask = Task { [weak self, audioCaptureTrimmingResources] in
+            let state = await audioCaptureTrimmingResources.preparationState(for: locale)
+            guard !Task.isCancelled,
+                  let self,
+                  self.audioCaptureTrimmingResourceGeneration == generation else { return }
+            self.audioCaptureTrimmingResourceState = state
+            self.audioCaptureTrimmingResourceTask = nil
+        }
+    }
+
+    func downloadAudioCaptureTrimmingResource() {
+        let locale = trimmingResourceLocale
+        let generation = UUID()
+        audioCaptureTrimmingResourceGeneration = generation
+        audioCaptureTrimmingResourceTask?.cancel()
+        audioCaptureTrimmingResourceState = .downloading
+        audioCaptureTrimmingResourceTask = Task { [weak self, audioCaptureTrimmingResources] in
+            do {
+                try await audioCaptureTrimmingResources.download(for: locale)
+                try Task.checkCancellation()
+                let state = await audioCaptureTrimmingResources.preparationState(for: locale)
+                guard let self,
+                      self.audioCaptureTrimmingResourceGeneration == generation else { return }
+                self.audioCaptureTrimmingResourceState = state
+                self.audioCaptureTrimmingResourceTask = nil
+            } catch is CancellationError {
+                return
+            } catch {
+                guard let self,
+                      self.audioCaptureTrimmingResourceGeneration == generation else { return }
+                self.audioCaptureTrimmingResourceState = .failed
+                self.logStore.log("Audio trimming resource download failed: \(safeLogMessage(for: error))")
+                self.audioCaptureTrimmingResourceTask = nil
+            }
+        }
     }
 
     func isValidSTTSelection(_ id: ProviderIdentifier?) -> Bool {
@@ -358,6 +409,10 @@ final class ProviderStore {
                 self.credentialStateTask = nil
             }
         }
+    }
+
+    private var trimmingResourceLocale: Locale {
+        Locale(identifier: preferences.sttLanguage.apiCode ?? Locale.current.identifier)
     }
 
     private func startCodexOperation(

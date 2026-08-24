@@ -79,6 +79,95 @@ final class DictationCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testNoSpeechCaptureDoesNotReachTheTranscriber() async throws {
+        let recorder = RecorderSpy()
+        recorder.stopURL = try temporaryAudioFile()
+        let trimmer = AudioCaptureTrimmerSpy(result: .noSpeechDetected)
+        let transcriber = TranscriberSpy()
+        let context = makeContext(recorder: recorder, transcriber: transcriber, trimmer: trimmer)
+
+        context.coordinator.startRecording()
+        await waitUntil("recording") { context.coordinator.state == .recording }
+        context.clock.advance(by: 1)
+        context.coordinator.stopRecording(request: testRequest())
+        await waitUntil("no speech") {
+            context.coordinator.state == .error(.noSpeechDetected)
+        }
+
+        let trimCallCount = await trimmer.calls.count
+        let transcriptionCalls = await transcriber.calls
+        XCTAssertEqual(trimCallCount, 1)
+        XCTAssertTrue(transcriptionCalls.isEmpty)
+        XCTAssertEqual(recorder.deleteCount, 1)
+    }
+
+    @MainActor
+    func testTrimmedCaptureIsSentToTheTranscriber() async throws {
+        let recorder = RecorderSpy()
+        let originalURL = try temporaryAudioFile()
+        let trimmedURL = try temporaryAudioFile()
+        recorder.stopURL = originalURL
+        let trimmer = AudioCaptureTrimmerSpy(result: .trimmed(trimmedURL))
+        let transcriber = TranscriberSpy()
+        let context = makeContext(recorder: recorder, transcriber: transcriber, trimmer: trimmer)
+
+        context.coordinator.startRecording()
+        await waitUntil("recording") { context.coordinator.state == .recording }
+        context.clock.advance(by: 1)
+        context.coordinator.stopRecording(request: testRequest())
+        await waitUntil("completion") { context.coordinator.state == .idle }
+
+        let transcriptionCalls = await transcriber.calls
+        XCTAssertEqual(transcriptionCalls.first?.audioURL, trimmedURL)
+        XCTAssertEqual(recorder.deleteCount, 1)
+    }
+
+    @MainActor
+    func testDisabledSilenceTrimmingBypassesTheTrimmer() async throws {
+        let recorder = RecorderSpy()
+        recorder.stopURL = try temporaryAudioFile()
+        let trimmer = AudioCaptureTrimmerSpy(result: .noSpeechDetected)
+        let context = makeContext(recorder: recorder, trimmer: trimmer)
+        let request = testRequest()
+
+        context.coordinator.startRecording(
+            request: request,
+            trimLeadingAndTrailingSilence: false
+        )
+        await waitUntil("recording") { context.coordinator.state == .recording }
+        context.clock.advance(by: 1)
+        context.coordinator.stopRecording(request: request)
+        await waitUntil("completion") { context.coordinator.state == .idle }
+
+        let trimCallCount = await trimmer.calls.count
+        XCTAssertEqual(trimCallCount, 0)
+    }
+
+    @MainActor
+    func testReducingInternalPausesProcessesCaptureWithoutEdgeTrimming() async throws {
+        let recorder = RecorderSpy()
+        recorder.stopURL = try temporaryAudioFile()
+        let trimmer = AudioCaptureTrimmerSpy(result: .unchanged(recorder.stopURL!))
+        let context = makeContext(recorder: recorder, trimmer: trimmer)
+        let request = testRequest()
+
+        context.coordinator.startRecording(
+            request: request,
+            trimLeadingAndTrailingSilence: false,
+            reduceLongInternalPauses: true
+        )
+        await waitUntil("recording") { context.coordinator.state == .recording }
+        context.clock.advance(by: 1)
+        context.coordinator.stopRecording(request: request)
+        await waitUntil("completion") { context.coordinator.state == .idle }
+
+        let calls = await trimmer.calls
+        let call = try XCTUnwrap(calls.first)
+        XCTAssertFalse(call.removeEdgeSilence)
+        XCTAssertTrue(call.reduceInternalPauses)
+    }
+
+    @MainActor
     func testRecordingForwardsTheFrozenAudioInputToTheRecorder() async {
         let recorder = RecorderSpy()
         let context = makeContext(recorder: recorder)
@@ -430,6 +519,19 @@ final class DictationCoordinatorTests: XCTestCase {
         }
     }
 
+    private func testRequest() -> DictationRequest {
+        DictationRequest(
+            transcription: TranscriptionRequest(
+                configuration: testSTTConfiguration,
+                apiKey: "stt-secret",
+                prompt: nil,
+                language: "fr"
+            ),
+            cleanup: nil,
+            outputMode: .clipboard
+        )
+    }
+
     private func workflowPlan(name: String, steps: [CleanupStep]) -> CleanupPlan {
         CleanupPlan(
             configuration: .openAIResponses,
@@ -446,6 +548,7 @@ final class DictationCoordinatorTests: XCTestCase {
         recorder: any AudioRecording = RecorderSpy(),
         transcriber: any SpeechTranscribing = TranscriberSpy(),
         cleaner: any TextCleaning = CleanerSpy(),
+        trimmer: any AudioCaptureTrimming = PassthroughAudioCaptureTrimmer(),
         delivery: DeliverySpy = DeliverySpy(),
         permission: any MicrophonePermissionRequesting = PermissionSpy(),
         sleep: @escaping (Duration) async throws -> Void = { duration in
@@ -456,6 +559,7 @@ final class DictationCoordinatorTests: XCTestCase {
         let logs = TestLogStore()
         let dependencies = DictationDependencies(
             audioRecorder: recorder,
+            audioCaptureTrimmer: trimmer,
             microphonePermission: permission,
             textDelivery: delivery,
             transcriber: transcriber,

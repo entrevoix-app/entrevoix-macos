@@ -16,6 +16,7 @@ public enum DictationFailure: Equatable, Sendable {
     case microphonePermissionDenied
     case recordingFailed(message: UserFacingErrorMessage)
     case audioUnavailable
+    case noSpeechDetected
     case sessionUnavailable
     case transcriptionFailed(message: UserFacingErrorMessage)
     case cleanupFailed(message: UserFacingErrorMessage)
