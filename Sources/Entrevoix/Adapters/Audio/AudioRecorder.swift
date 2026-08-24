@@ -13,14 +13,6 @@ protocol AudioLevelProviding: AnyObject {
 /// Records microphone sessions into the application's fixed PCM WAV format.
 @MainActor
 final class AudioRecorder: AudioRecording, AudioLevelProviding {
-    /// Temporary diagnostic switch for inspecting the completed WAV sent to STT.
-    /// Keep this disabled outside local Debug builds: recordings can contain sensitive data.
-    #if DEBUG
-    private static let retainCompletedCapturesForTesting = true
-    #else
-    private static let retainCompletedCapturesForTesting = false
-    #endif
-
     private struct CaptureEngineKey: Hashable {
         let input: AudioInputSelection
     }
@@ -155,10 +147,6 @@ final class AudioRecorder: AudioRecording, AudioLevelProviding {
     }
 
     func deleteCapture(at url: URL) {
-        guard !Self.retainCompletedCapturesForTesting else {
-            logger.log("Retained completed audio capture for local testing.")
-            return
-        }
         try? FileManager.default.removeItem(at: url)
         if currentURL == url { currentURL = nil }
     }

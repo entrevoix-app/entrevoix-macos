@@ -7,6 +7,16 @@ import XCTest
 
 @MainActor
 final class AudioRecorderTests: XCTestCase {
+    func testDeleteCaptureRemovesCompletedWAV() throws {
+        let url = try appTemporaryFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let recorder = AudioRecorder(logger: AppLogStore(), captureEngineFactory: AudioCaptureEngineFactorySpy(engines: []))
+
+        recorder.deleteCapture(at: url)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
     func testSpeechTrimUsesWordTimeRangesInsteadOfFinalizationRange() {
         var spoken = AttributedString("speech")
         spoken[AttributeScopes.SpeechAttributes.TimeRangeAttribute.self] = CMTimeRange(
