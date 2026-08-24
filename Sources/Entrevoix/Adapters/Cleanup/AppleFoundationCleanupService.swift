@@ -22,13 +22,20 @@ struct AppleFoundationCleanupService: TextCleaning {
     func clean(text: String, request: CleanupRequest) async throws -> String {
         try await preflight(request: request)
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw AppleProviderError(capability: .ttt, reason: .missingConfiguration) }
-        let instructions = CleanupTransformationPolicy.instructions(for: request.prompt)
+        let instructions = CleanupTransformationPolicy.systemInstructions
+        let input = CleanupTransformationPolicy.input(instructions: request.prompt, transcript: text)
         let model = SystemLanguageModel(useCase: .general, guardrails: .permissiveContentTransformations)
         let session = LanguageModelSession(model: model, instructions: instructions)
-        let response = try await session.respond(to: text, options: GenerationOptions(sampling: .greedy))
+        let response = try await session.respond(to: input, options: GenerationOptions(sampling: .greedy))
         let result = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !result.isEmpty else { throw AppleProviderError(capability: .ttt, reason: .missingConfiguration) }
-        return CleanupTransformationPolicy.shouldUseRawTranscript(result: result, transcript: text, cleanupPolicy: request.prompt) ? text.trimmingCharacters(in: .whitespacesAndNewlines) : result
+        return CleanupTransformationPolicy.shouldUseRawTranscript(
+            result: result,
+            transcript: text,
+            cleanupPolicy: request.prompt,
+            systemInstructions: instructions,
+            input: input
+        ) ? text.trimmingCharacters(in: .whitespacesAndNewlines) : result
     }
 
     func clean(text: String, configuration: ProviderConfiguration, apiKey: String, format: CleanupAPIFormat, prompt: String) async throws -> String {

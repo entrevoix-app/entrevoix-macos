@@ -19,7 +19,8 @@ struct OpenAITextCleanupService: TextCleaning {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CleanupError.emptyInput }
         let cleanupPolicy = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanupPolicy.isEmpty else { throw CleanupError.emptyPrompt }
-        let instructions = CleanupTransformationPolicy.instructions(for: cleanupPolicy)
+        let instructions = CleanupTransformationPolicy.systemInstructions
+        let input = CleanupTransformationPolicy.input(instructions: cleanupPolicy, transcript: text)
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -32,7 +33,7 @@ struct OpenAITextCleanupService: TextCleaning {
             request.httpBody = try JSONEncoder().encode(ResponsesRequest(
                 model: configuration.model,
                 instructions: instructions,
-                input: text,
+                input: input,
                 store: false
             ))
         case .chatCompletions:
@@ -40,7 +41,7 @@ struct OpenAITextCleanupService: TextCleaning {
                 model: configuration.model,
                 messages: [
                     ChatMessage(role: "system", content: instructions),
-                    ChatMessage(role: "user", content: text)
+                    ChatMessage(role: "user", content: input)
                 ],
                 store: false
             ))
@@ -63,7 +64,13 @@ struct OpenAITextCleanupService: TextCleaning {
             throw CleanupError.emptyResult
         }
         let cleanedResult = result.trimmingCharacters(in: .whitespacesAndNewlines)
-        if CleanupTransformationPolicy.shouldUseRawTranscript(result: cleanedResult, transcript: text, cleanupPolicy: cleanupPolicy, instructions: instructions) {
+        if CleanupTransformationPolicy.shouldUseRawTranscript(
+            result: cleanedResult,
+            transcript: text,
+            cleanupPolicy: cleanupPolicy,
+            systemInstructions: instructions,
+            input: input
+        ) {
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return cleanedResult
