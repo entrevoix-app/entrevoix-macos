@@ -6,6 +6,7 @@ struct AppStoreDependencies {
     let coordinator: DictationCoordinator
     let connectionTest: ConnectionTestCoordinator
     let textDelivery: any TextDelivering
+    let cleanupPromptExportReader: any CleanupPromptExportReading
     let preferencesStore: any PreferencesStoring
     let keychain: any SecretStoring
     let codexCredentials: any CodexCredentialsStoring & CodexAccessTokenProviding
@@ -27,6 +28,7 @@ struct AppStoreDependencies {
         coordinator: DictationCoordinator,
         connectionTest: ConnectionTestCoordinator,
         textDelivery: any TextDelivering,
+        cleanupPromptExportReader: any CleanupPromptExportReading,
         preferencesStore: any PreferencesStoring,
         keychain: any SecretStoring,
         codexCredentials: any CodexCredentialsStoring & CodexAccessTokenProviding = UnavailableCodexCredentialsStore(),
@@ -44,7 +46,7 @@ struct AppStoreDependencies {
         logStore: AppLogStore,
         now: @escaping () -> Date
     ) {
-        self.coordinator = coordinator; self.connectionTest = connectionTest; self.textDelivery = textDelivery
+        self.coordinator = coordinator; self.connectionTest = connectionTest; self.textDelivery = textDelivery; self.cleanupPromptExportReader = cleanupPromptExportReader
         self.preferencesStore = preferencesStore; self.keychain = keychain; self.codexCredentials = codexCredentials; self.codexAuthenticator = codexAuthenticator; self.modelCatalog = modelCatalog; self.audioCaptureTrimmingResources = audioCaptureTrimmingResources; self.providerAlerts = providerAlerts
         self.hotkeys = hotkeys; self.launchAtLogin = launchAtLogin; self.feedback = feedback
         self.listeningIndicator = listeningIndicator; self.permissions = permissions; self.audioInputDevices = audioInputDevices; self.updater = updater; self.logStore = logStore

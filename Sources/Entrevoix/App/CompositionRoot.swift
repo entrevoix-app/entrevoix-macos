@@ -102,6 +102,7 @@ enum CompositionRoot {
             coordinator: coordinator,
             connectionTest: connectionTest,
             textDelivery: textDelivery,
+            cleanupPromptExportReader: JSONCleanupPromptExportReader(),
             preferencesStore: preferencesStore,
             keychain: KeychainStore(legacyService: LegacyMurmureMigration.legacyKeychainService),
             codexCredentials: codexCredentials,

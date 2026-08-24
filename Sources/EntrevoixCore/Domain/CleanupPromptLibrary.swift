@@ -7,6 +7,16 @@ public enum CleanupPromptValidationError: Error, Equatable, Sendable {
     case invalidIcon
 }
 
+public struct CleanupPromptImportResult: Equatable, Sendable {
+    public let importedPrompts: [CleanupPrompt]
+    public let skippedCount: Int
+
+    public init(importedPrompts: [CleanupPrompt], skippedCount: Int) {
+        self.importedPrompts = importedPrompts
+        self.skippedCount = skippedCount
+    }
+}
+
 public enum CleanupPromptLibrary {
     public static func validatedSaving(
         _ prompt: CleanupPrompt,
@@ -27,6 +37,38 @@ public enum CleanupPromptLibrary {
         var value = prompt
         value.name = name
         return .success(value)
+    }
+
+    public static func importing(
+        _ importedPrompts: [CleanupPrompt],
+        into existingPrompts: [CleanupPrompt]
+    ) -> CleanupPromptImportResult {
+        var acceptedPrompts = existingPrompts
+        var imported: [CleanupPrompt] = []
+        var skippedCount = 0
+
+        for sourcePrompt in importedPrompts {
+            let candidate: CleanupPrompt
+            if acceptedPrompts.contains(where: { $0.id == sourcePrompt.id }) {
+                candidate = CleanupPrompt(
+                    name: sourcePrompt.name,
+                    systemImageName: sourcePrompt.systemImageName,
+                    instructions: sourcePrompt.instructions
+                )
+            } else {
+                candidate = sourcePrompt
+            }
+
+            switch validatedSaving(candidate, into: acceptedPrompts) {
+            case .success(let prompt):
+                acceptedPrompts.append(prompt)
+                imported.append(prompt)
+            case .failure:
+                skippedCount += 1
+            }
+        }
+
+        return CleanupPromptImportResult(importedPrompts: imported, skippedCount: skippedCount)
     }
 
     private static func normalized(_ value: String) -> String {
