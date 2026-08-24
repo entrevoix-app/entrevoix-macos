@@ -35,6 +35,15 @@ enum EntrevoixLocalization {
         return localizedBundle.localizedString(forKey: key, value: defaultValue, table: nil)
     }
 
+    static func aboutVersion(_ version: String = AppVersion.marketingVersion, locale: Locale) -> String {
+        let format = text(
+            "settings.version",
+            defaultValue: "Entrevoix %@ — MIT License",
+            locale: locale
+        )
+        return String(format: format, locale: locale, arguments: [version])
+    }
+
     static func resourceURL(forResource name: String, withExtension fileExtension: String) -> URL? {
         resourceBundle().url(forResource: name, withExtension: fileExtension)
     }

@@ -112,7 +112,7 @@ struct GeneralSettingsView: View {
             PermissionsSettings(model: model)
 
             Section(EntrevoixLocalization.text("settings.about", defaultValue: "About", locale: locale)) {
-                Text(EntrevoixLocalization.text("settings.version", defaultValue: "Entrevoix 0.1.0 — MIT License", locale: locale))
+                Text(EntrevoixLocalization.aboutVersion(locale: locale))
                 Link(EntrevoixLocalization.text("settings.source_code", defaultValue: "Source code on GitHub", locale: locale), destination: URL(string: "https://github.com/entrevoix-app/entrevoix-macos")!)
             }
         }
