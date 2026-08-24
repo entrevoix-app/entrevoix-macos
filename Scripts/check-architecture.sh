@@ -5,28 +5,15 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repository_root"
 
-core_import_violations="$(
-    find Sources/EntrevoixCore -type f -name '*.swift' -print0 \
-        | xargs -0 grep -nH -E '^import ' \
-        | grep -E -v ':import (Foundation|_Concurrency)$' \
-        || true
-)"
-if [[ -n "$core_import_violations" ]]; then
-    echo "EntrevoixCore may only import Foundation or _Concurrency:" >&2
-    printf '%s\n' "$core_import_violations" >&2
-    exit 1
-fi
-
-if find Sources/EntrevoixCore -type f -name '*.swift' -print0 \
-    | xargs -0 grep -nH -E '(@Observable|ObservableObject|@Published)'; then
-    echo "EntrevoixCore application services must publish snapshots, not observable UI state." >&2
+if [[ -d Sources/EntrevoixCore ]]; then
+    echo "EntrevoixCore belongs to the entrevoix-shared package, not this repository." >&2
     exit 1
 fi
 
 adapter_owned_ports='protocol (PermissionProviding|HotkeyHandling|LaunchAtLoginControlling|FeedbackPlaying)'
 if find Sources/Entrevoix/Adapters -type f -name '*.swift' -print0 \
     | xargs -0 grep -nH -E "$adapter_owned_ports"; then
-    echo "System-facing ports must live in EntrevoixCore/Application/Ports." >&2
+    echo "System-facing ports must live in the shared EntrevoixCore package." >&2
     exit 1
 fi
 

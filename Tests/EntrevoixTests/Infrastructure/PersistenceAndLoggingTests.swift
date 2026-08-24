@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 import EntrevoixCore
+import EntrevoixAppleAdapters
 @testable import Entrevoix
 
 final class PersistenceAndLoggingTests: XCTestCase {

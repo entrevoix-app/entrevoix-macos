@@ -187,9 +187,10 @@ saved shortcuts remain active after relaunching the app.
 ## Project Status
 
 Milestone J8 provides the current Swift 6 app targeting macOS 26. The app uses a
-lightweight hexagonal architecture with an `EntrevoixCore` domain library and an
-`Entrevoix` executable target. Its domain and application layers are separated
-from the macOS presentation and infrastructure adapters.
+lightweight hexagonal architecture: its `Entrevoix` executable target depends on
+the exact tagged `EntrevoixCore`, `EntrevoixOpenAIAdapters`, and
+`EntrevoixAppleAdapters` products from `entrevoix-shared`. Its macOS presentation
+and system-integration adapters remain local to this repository.
 
 The current implementation includes the complete dictation flow, provider
 configuration, optional text cleanup, clipboard and Accessibility delivery,

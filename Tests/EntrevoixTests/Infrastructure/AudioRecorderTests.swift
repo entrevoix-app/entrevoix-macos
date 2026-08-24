@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreMedia
+@testable import EntrevoixAppleAdapters
 import EntrevoixCore
 import Speech
 import XCTest

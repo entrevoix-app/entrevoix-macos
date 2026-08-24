@@ -1,6 +1,8 @@
 import Foundation
 import Testing
+import EntrevoixAppleAdapters
 import EntrevoixCore
+@testable import EntrevoixOpenAIAdapters
 @testable import Entrevoix
 
 @Suite("Provider model catalogue")

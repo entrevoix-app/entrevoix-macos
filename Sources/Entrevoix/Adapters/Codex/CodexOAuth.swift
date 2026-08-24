@@ -163,13 +163,13 @@ final class CodexBrowserAuthenticator: CodexAuthenticating {
 }
 
 actor CodexCredentialVault: CodexCredentialsStoring, CodexAccessTokenProviding {
-    private let access: any KeychainAccessing
+    private let access: any CodexKeychainAccessing
     private let tokenClient: CodexOAuthTokenClient
     private var cachedCredentials: CodexCredentials?
     private var refreshTask: Task<CodexCredentials, any Error>?
     private var credentialsGeneration = 0
 
-    init(access: any KeychainAccessing = SystemKeychainAccess(), tokenClient: CodexOAuthTokenClient = CodexOAuthTokenClient()) {
+    init(access: any CodexKeychainAccessing = SystemCodexKeychainAccess(), tokenClient: CodexOAuthTokenClient = CodexOAuthTokenClient()) {
         self.access = access
         self.tokenClient = tokenClient
     }
@@ -341,10 +341,47 @@ private extension URLSession {
         configuration.httpShouldSetCookies = false
         return URLSession(
             configuration: configuration,
-            delegate: SameOriginRedirectDelegate(),
+            delegate: CodexSameOriginRedirectDelegate(),
             delegateQueue: nil
         )
     }()
+}
+
+private final class CodexSameOriginRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping @Sendable (URLRequest?) -> Void
+    ) {
+        guard
+            let originalURL = task.originalRequest?.url,
+            let redirectedURL = request.url,
+            CodexSameOriginPolicy.allowsRedirect(from: originalURL, to: redirectedURL)
+        else {
+            completionHandler(nil)
+            return
+        }
+        completionHandler(request)
+    }
+}
+
+private enum CodexSameOriginPolicy {
+    static func allowsRedirect(from lhs: URL, to rhs: URL) -> Bool {
+        lhs.scheme?.lowercased() == rhs.scheme?.lowercased()
+            && lhs.host?.lowercased() == rhs.host?.lowercased()
+            && effectivePort(for: lhs) == effectivePort(for: rhs)
+    }
+
+    private static func effectivePort(for url: URL) -> Int? {
+        if let port = url.port { return port }
+        switch url.scheme?.lowercased() {
+        case "https": return 443
+        case "http": return 80
+        default: return nil
+        }
+    }
 }
 
 private extension Data {

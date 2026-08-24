@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 import EntrevoixCore
+@testable import EntrevoixAppleAdapters
 @testable import Entrevoix
 
 final class KeychainStoreTests: XCTestCase {
@@ -30,7 +31,7 @@ final class KeychainStoreTests: XCTestCase {
 
     func testSaveReadFilterUpdateAndDelete() throws {
         let access = MemoryKeychainAccess()
-        let store = KeychainStore(service: service, access: access)
+        let store = KeychainStore(service: service, legacyService: nil, access: access)
         let first = UUID()
         let second = UUID()
 
@@ -49,7 +50,7 @@ final class KeychainStoreTests: XCTestCase {
 
     func testMalformedConsolidatedDataAndInvalidUUIDsAreIgnored() throws {
         let access = MemoryKeychainAccess()
-        let store = KeychainStore(service: service, access: access)
+        let store = KeychainStore(service: service, legacyService: nil, access: access)
         let requested = UUID()
         access.seed(Data("not-json".utf8), service: service, account: "api-keys")
         XCTAssertEqual(try store.read(profileIDs: [requested]), [:])
@@ -64,7 +65,7 @@ final class KeychainStoreTests: XCTestCase {
 
     func testLegacyItemsAreReadAndMigrated() throws {
         let access = MemoryKeychainAccess()
-        let store = KeychainStore(service: service, access: access)
+        let store = KeychainStore(service: service, legacyService: nil, access: access)
         let first = UUID()
         let second = UUID()
         access.seed(Data("legacy-key".utf8), service: service, account: first.uuidString)
@@ -93,7 +94,7 @@ final class KeychainStoreTests: XCTestCase {
     func testBackendErrorsPropagateWithoutSecrets() {
         let access = MemoryKeychainAccess()
         access.readError = KeychainStoreError.unexpectedStatus(-50)
-        let store = KeychainStore(service: service, access: access)
+        let store = KeychainStore(service: service, legacyService: nil, access: access)
 
         XCTAssertThrowsError(try store.read(profileIDs: [UUID()])) { error in
             XCTAssertEqual(error.localizedDescription, "Keychain error (-50).")
@@ -102,10 +103,10 @@ final class KeychainStoreTests: XCTestCase {
 
         let writeAccess = MemoryKeychainAccess()
         writeAccess.upsertError = KeychainStoreError.unexpectedStatus(-25299)
-        XCTAssertThrowsError(try KeychainStore(service: service, access: writeAccess).save([UUID(): "key"]))
+        XCTAssertThrowsError(try KeychainStore(service: service, legacyService: nil, access: writeAccess).save([UUID(): "key"]))
 
         let deleteAccess = MemoryKeychainAccess()
         deleteAccess.deleteError = KeychainStoreError.unexpectedStatus(-25300)
-        XCTAssertThrowsError(try KeychainStore(service: service, access: deleteAccess).save([:]))
+        XCTAssertThrowsError(try KeychainStore(service: service, legacyService: nil, access: deleteAccess).save([:]))
     }
 }

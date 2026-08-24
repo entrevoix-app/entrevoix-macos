@@ -13,12 +13,12 @@ let package = Package(
             name: "Entrevoix",
             targets: ["Entrevoix"]
         ),
-        .library(
-            name: "EntrevoixCore",
-            targets: ["EntrevoixCore"]
-        )
     ],
     dependencies: [
+        .package(
+            url: "https://github.com/entrevoix-app/entrevoix-shared.git",
+            exact: "0.1.0"
+        ),
         .package(
             url: "https://github.com/sindresorhus/KeyboardShortcuts.git",
             exact: "1.10.0"
@@ -29,13 +29,12 @@ let package = Package(
         )
     ],
     targets: [
-        .target(
-            name: "EntrevoixCore"
-        ),
         .executableTarget(
             name: "Entrevoix",
             dependencies: [
-                "EntrevoixCore",
+                .product(name: "EntrevoixCore", package: "entrevoix-shared"),
+                .product(name: "EntrevoixOpenAIAdapters", package: "entrevoix-shared"),
+                .product(name: "EntrevoixAppleAdapters", package: "entrevoix-shared"),
                 .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
                 .product(name: "Sparkle", package: "Sparkle")
             ],
@@ -45,11 +44,18 @@ let package = Package(
         ),
         .testTarget(
             name: "EntrevoixCoreTests",
-            dependencies: ["EntrevoixCore"]
+            dependencies: [
+                .product(name: "EntrevoixCore", package: "entrevoix-shared")
+            ]
         ),
         .testTarget(
             name: "EntrevoixTests",
-            dependencies: ["Entrevoix", "EntrevoixCore"]
+            dependencies: [
+                "Entrevoix",
+                .product(name: "EntrevoixCore", package: "entrevoix-shared"),
+                .product(name: "EntrevoixOpenAIAdapters", package: "entrevoix-shared"),
+                .product(name: "EntrevoixAppleAdapters", package: "entrevoix-shared")
+            ]
         )
     ]
 )

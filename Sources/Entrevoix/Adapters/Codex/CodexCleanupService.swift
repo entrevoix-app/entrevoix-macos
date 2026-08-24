@@ -1,5 +1,6 @@
 import Foundation
 import EntrevoixCore
+import EntrevoixOpenAIAdapters
 
 struct CodexCleanupService: TextCleaning {
     private let transport: any HTTPTransporting

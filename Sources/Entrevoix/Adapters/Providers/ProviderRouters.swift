@@ -1,4 +1,5 @@
 import Foundation
+import EntrevoixAppleAdapters
 import EntrevoixCore
 
 struct ProviderSpeechRouter: SpeechTranscribing {
