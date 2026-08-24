@@ -23,6 +23,10 @@ final class PromptLibraryStore {
 
     var activeSelection: CleanupTransformationSelection? { preferences.activeCleanupSelection }
 
+    func makeExport() -> CleanupPromptExport {
+        CleanupPromptExport(prompts: preferences.cleanupPrompts)
+    }
+
     var differsFromDefault: Bool {
         guard preferences.cleanupPrompts.count == 1,
               let prompt = preferences.cleanupPrompts.first else { return true }

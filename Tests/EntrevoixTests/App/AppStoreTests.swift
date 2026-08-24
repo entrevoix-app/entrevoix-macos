@@ -296,6 +296,15 @@ final class AppStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testPromptLibraryExportUsesTheCurrentPromptSnapshot() {
+        let first = CleanupPrompt(name: "Writing", systemImageName: "quote.bubble", instructions: "Improve writing.")
+        let second = CleanupPrompt(name: "Code", systemImageName: "terminal", instructions: "Keep code exact.")
+        let context = makeContext(preferences: AppPreferences(cleanupPrompts: [first, second]))
+
+        XCTAssertEqual(context.model.makeCleanupPromptExport(), CleanupPromptExport(prompts: [first, second]))
+    }
+
+    @MainActor
     func testDeletingPromptPrunesWorkflowReferencesAndRepairsActiveSelection() {
         let defaultPrompt = CleanupPrompt(
             id: AppPreferences.defaultCleanupPromptID,

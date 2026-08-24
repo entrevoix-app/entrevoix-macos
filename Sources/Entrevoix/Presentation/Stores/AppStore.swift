@@ -361,6 +361,10 @@ final class AppStore {
         promptLibrary.reset()
     }
 
+    func makeCleanupPromptExport() -> CleanupPromptExport {
+        promptLibrary.makeExport()
+    }
+
     func resetCleanupPrompt() { resetPromptLibrary() }
 
     var state: DictationState { dictationSession.state }

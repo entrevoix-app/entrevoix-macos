@@ -776,6 +776,8 @@ private struct PromptListPage: View {
     @Bindable var model: AppStore
     @Bindable var state: PromptLibraryNavigationState
     @State private var searchText = ""
+    @State private var exportDocument: PromptLibraryExportDocument?
+    @State private var showsExportFailure = false
 
     private var filteredPrompts: [CleanupPrompt] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -854,7 +856,7 @@ private struct PromptListPage: View {
             prompt: EntrevoixLocalization.text("library.search", defaultValue: "Search…", locale: locale)
         )
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     let id = UUID()
                     state.beginCreating(id)
@@ -865,6 +867,31 @@ private struct PromptListPage: View {
                     )
                 }
                 .disabled(state.isDirty)
+                Button {
+                    exportDocument = PromptLibraryExportDocument(export: model.makeCleanupPromptExport())
+                } label: {
+                    Label(
+                        EntrevoixLocalization.text("prompts.export", defaultValue: "Export…", locale: locale),
+                        systemImage: "square.and.arrow.up"
+                    )
+                }
+                .disabled(model.preferences.cleanupPrompts.isEmpty || state.isDirty)
+            }
+        }
+        .fileExporter(
+            isPresented: Binding(
+                get: { exportDocument != nil },
+                set: { isPresented in
+                    if !isPresented { exportDocument = nil }
+                }
+            ),
+            document: exportDocument,
+            contentType: .json,
+            defaultFilename: "entrevoix-prompts"
+        ) { result in
+            exportDocument = nil
+            if case .failure = result {
+                showsExportFailure = true
             }
         }
         .alert(EntrevoixLocalization.text("prompts.reset_title", defaultValue: "Reset prompt list?", locale: locale), isPresented: $state.showResetConfirmation) {
@@ -874,6 +901,11 @@ private struct PromptListPage: View {
             Button(EntrevoixLocalization.text("action.cancel", defaultValue: "Cancel", locale: locale), role: .cancel) { }
         } message: {
             Text(EntrevoixLocalization.text("prompts.reset_message", defaultValue: "This replaces the current prompt list with the localized example prompt.", locale: locale))
+        }
+        .alert(EntrevoixLocalization.text("prompts.export_failed_title", defaultValue: "Export failed", locale: locale), isPresented: $showsExportFailure) {
+            Button(EntrevoixLocalization.text("action.ok", defaultValue: "OK", locale: locale), role: .cancel) { }
+        } message: {
+            Text(EntrevoixLocalization.text("prompts.export_failed_message", defaultValue: "Your prompts could not be exported. Please try again.", locale: locale))
         }
     }
 }

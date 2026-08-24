@@ -128,6 +128,34 @@ final class PersistenceAndLoggingTests: XCTestCase {
         XCTAssertNil(empty.activeCleanupPromptID)
     }
 
+    func testCleanupPromptExportEncodesOnlyAVersionedPromptLibrary() throws {
+        let first = CleanupPrompt(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000010")!,
+            name: "Writing",
+            systemImageName: "quote.bubble",
+            instructions: "Improve writing."
+        )
+        let second = CleanupPrompt(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000011")!,
+            name: "Code",
+            systemImageName: "terminal",
+            instructions: "Keep code exact."
+        )
+        let exported = CleanupPromptExport(prompts: [first, second])
+
+        let data = try exported.encodedJSON()
+        let decoded = try JSONDecoder().decode(CleanupPromptExport.self, from: data)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertEqual(decoded, exported)
+        XCTAssertEqual(object["format"] as? String, "entrevoix.cleanup-prompts")
+        XCTAssertEqual(object["version"] as? Int, 1)
+        XCTAssertEqual(Set(object.keys), ["format", "version", "prompts"])
+        XCTAssertEqual((object["prompts"] as? [[String: Any]])?.count, 2)
+        XCTAssertNil(object["activeCleanupSelection"])
+        XCTAssertNil(object["providerCatalog"])
+    }
+
     func testMissingFieldsUseCurrentDefaults() throws {
         let data = Data("{\"schemaVersion\":4}".utf8)
         let preferences = try JSONDecoder().decode(AppPreferences.self, from: data)
