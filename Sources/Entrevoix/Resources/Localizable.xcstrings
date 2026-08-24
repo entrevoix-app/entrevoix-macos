@@ -20,6 +20,7 @@
       }
     },
     "action.back" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Back" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Retour" } } } },
+    "provider.actions" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Provider actions" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Actions du fournisseur" } } } },
     "action.quit" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Quit" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Quitter" } } } },
     "action.remove" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer" } } } },
     "action.discard" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Discard" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Ignorer" } } } },

@@ -130,6 +130,7 @@ final class LocalizationTests: XCTestCase {
             "updates.channel.confirm_action",
             "provider.openai_codex",
             "provider.add_another",
+            "provider.actions",
             "provider.back_to_catalog",
             "provider.configured_title",
             "action.configure",
