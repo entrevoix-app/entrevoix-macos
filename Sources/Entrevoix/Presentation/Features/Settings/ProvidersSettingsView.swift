@@ -21,17 +21,8 @@ struct ProvidersSettingsView: View {
                     onAddRemote: begin
                 )
             } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    Button(action: showCatalog) {
-                        Label(text("provider.back_to_catalog", "All providers"), systemImage: "chevron.left")
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, SettingsLayout.pageInset)
-                    .padding(.top, SettingsLayout.toolbarContentInset)
-
-                    detail
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
+                detail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .onChange(of: selection) { _, id in
@@ -54,6 +45,13 @@ struct ProvidersSettingsView: View {
             Text(text("provider.remove_message", "Its API key is removed first. Selected STT and TTT capabilities will be deselected."))
         }
         .toolbar {
+            if !isShowingCatalog {
+                ToolbarItem(placement: .navigation) {
+                    Button(action: showCatalog) {
+                        Label(text("provider.back_to_catalog", "All providers"), systemImage: "chevron.left")
+                    }
+                }
+            }
             if !isShowingCatalog, selection != nil {
                 ToolbarItemGroup(placement: .primaryAction) {
                     if draft != nil {
