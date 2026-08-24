@@ -156,6 +156,18 @@ final class PersistenceAndLoggingTests: XCTestCase {
         XCTAssertNil(object["providerCatalog"])
     }
 
+    func testCleanupPromptExportRejectsUnsupportedFiles() {
+        let unsupportedFormat = Data(#"{"format":"other.prompts","version":1,"prompts":[]}"#.utf8)
+        let unsupportedVersion = Data(#"{"format":"entrevoix.cleanup-prompts","version":2,"prompts":[]}"#.utf8)
+
+        XCTAssertThrowsError(try CleanupPromptExport.decodedJSON(unsupportedFormat)) {
+            XCTAssertEqual($0 as? CleanupPromptImportError, .unsupportedFormat)
+        }
+        XCTAssertThrowsError(try CleanupPromptExport.decodedJSON(unsupportedVersion)) {
+            XCTAssertEqual($0 as? CleanupPromptImportError, .unsupportedVersion)
+        }
+    }
+
     func testMissingFieldsUseCurrentDefaults() throws {
         let data = Data("{\"schemaVersion\":4}".utf8)
         let preferences = try JSONDecoder().decode(AppPreferences.self, from: data)

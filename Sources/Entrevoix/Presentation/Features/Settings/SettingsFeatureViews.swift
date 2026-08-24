@@ -778,6 +778,8 @@ private struct PromptListPage: View {
     @State private var searchText = ""
     @State private var exportDocument: PromptLibraryExportDocument?
     @State private var showsExportFailure = false
+    @State private var showsImportPicker = false
+    @State private var importFailure: CleanupPromptImportError?
 
     private var filteredPrompts: [CleanupPrompt] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -785,6 +787,18 @@ private struct PromptListPage: View {
         return model.preferences.cleanupPrompts.filter {
             $0.name.localizedCaseInsensitiveContains(query)
                 || $0.instructions.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    private var promptRows: [PromptLibraryListRow] {
+        let activeSelection = model.promptLibrary.activeSelection
+        let lastPromptID = filteredPrompts.last?.id
+        return filteredPrompts.map { prompt in
+            PromptLibraryListRow(
+                prompt: prompt,
+                isActive: activeSelection == CleanupTransformationSelection.prompt(prompt.id),
+                isLast: prompt.id == lastPromptID
+            )
         }
     }
 
@@ -809,23 +823,14 @@ private struct PromptListPage: View {
                     systemImage: "text.badge.checkmark"
                 )
             } else {
-                ForEach(filteredPrompts) { prompt in
-                    Button {
-                        state.openPrompt(prompt.id)
-                    } label: {
-                        SettingsLibraryRow(
-                            title: prompt.name,
-                            systemImage: prompt.systemImageName,
-                            detail: prompt.instructions,
-                            status: model.promptLibrary.activeSelection == .prompt(prompt.id)
-                                ? .active(EntrevoixLocalization.text("library.active", defaultValue: "Active", locale: locale))
-                                : nil,
-                            showsDisclosure: true
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .listRowSeparator(prompt.id == filteredPrompts.last?.id ? .hidden : .visible, edges: .bottom)
+                ForEach(promptRows) { row in
+                    PromptLibraryPromptRow(
+                        prompt: row.prompt,
+                        isActive: row.isActive,
+                        isLast: row.isLast,
+                        locale: locale,
+                        onSelect: { state.openPrompt(row.id) }
+                    )
                 }
             }
 
@@ -876,6 +881,33 @@ private struct PromptListPage: View {
                     )
                 }
                 .disabled(model.preferences.cleanupPrompts.isEmpty || state.isDirty)
+                Button {
+                    showsImportPicker = true
+                } label: {
+                    Label(
+                        EntrevoixLocalization.text("prompts.import", defaultValue: "Import…", locale: locale),
+                        systemImage: "square.and.arrow.down"
+                    )
+                }
+                .disabled(state.isDirty)
+            }
+        }
+        .fileImporter(
+            isPresented: $showsImportPicker,
+            allowedContentTypes: [.json],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else {
+                    importFailure = .invalidFile
+                    return
+                }
+                if case .failure(let error) = model.importCleanupPrompts(from: url) {
+                    importFailure = error
+                }
+            case .failure:
+                importFailure = .unreadableFile
             }
         }
         .fileExporter(
@@ -907,6 +939,60 @@ private struct PromptListPage: View {
         } message: {
             Text(EntrevoixLocalization.text("prompts.export_failed_message", defaultValue: "Your prompts could not be exported. Please try again.", locale: locale))
         }
+        .alert(EntrevoixLocalization.text("prompts.import_failed_title", defaultValue: "Import failed", locale: locale), isPresented: Binding(
+            get: { importFailure != nil },
+            set: { isPresented in
+                if !isPresented { importFailure = nil }
+            }
+        )) {
+            Button(EntrevoixLocalization.text("action.ok", defaultValue: "OK", locale: locale), role: .cancel) { }
+        } message: {
+            Text(importFailureMessage(locale: locale))
+        }
+    }
+
+    private func importFailureMessage(locale: Locale) -> String {
+        switch importFailure {
+        case .unsupportedFormat:
+            EntrevoixLocalization.text("prompts.import_unsupported_format", defaultValue: "This file is not an Entrevoix prompt export.", locale: locale)
+        case .unsupportedVersion:
+            EntrevoixLocalization.text("prompts.import_unsupported_version", defaultValue: "This prompt export was created by an unsupported version of Entrevoix.", locale: locale)
+        case .unreadableFile, .invalidFile, nil:
+            EntrevoixLocalization.text("prompts.import_invalid_file", defaultValue: "Choose a valid prompt export file and try again.", locale: locale)
+        }
+    }
+}
+
+private struct PromptLibraryListRow: Identifiable {
+    let prompt: CleanupPrompt
+    let isActive: Bool
+    let isLast: Bool
+
+    var id: UUID { prompt.id }
+}
+
+private struct PromptLibraryPromptRow: View {
+    let prompt: CleanupPrompt
+    let isActive: Bool
+    let isLast: Bool
+    let locale: Locale
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            SettingsLibraryRow(
+                title: prompt.name,
+                systemImage: prompt.systemImageName,
+                detail: prompt.instructions,
+                status: isActive
+                    ? .active(EntrevoixLocalization.text("library.active", defaultValue: "Active", locale: locale))
+                    : nil,
+                showsDisclosure: true
+            )
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .listRowSeparator(isLast ? .hidden : .visible, edges: .bottom)
     }
 }
 

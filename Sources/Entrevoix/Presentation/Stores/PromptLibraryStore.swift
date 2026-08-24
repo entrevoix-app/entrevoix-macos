@@ -6,9 +6,14 @@ import Observation
 @Observable
 final class PromptLibraryStore {
     private let preferencesModel: PreferencesStore
+    private let exportReader: any CleanupPromptExportReading
 
-    init(preferencesModel: PreferencesStore) {
+    init(
+        preferencesModel: PreferencesStore,
+        exportReader: any CleanupPromptExportReading
+    ) {
         self.preferencesModel = preferencesModel
+        self.exportReader = exportReader
     }
 
     var activePrompt: CleanupPrompt? {
@@ -25,6 +30,25 @@ final class PromptLibraryStore {
 
     func makeExport() -> CleanupPromptExport {
         CleanupPromptExport(prompts: preferences.cleanupPrompts)
+    }
+
+    func importPrompts(from url: URL) -> Result<CleanupPromptImportResult, CleanupPromptImportError> {
+        do {
+            let export = try exportReader.readExport(at: url)
+            let result = CleanupPromptLibrary.importing(export.prompts, into: preferences.cleanupPrompts)
+            guard !result.importedPrompts.isEmpty else { return .success(result) }
+
+            preferences.cleanupPrompts.append(contentsOf: result.importedPrompts)
+            if preferences.activeCleanupSelection == nil, let first = result.importedPrompts.first {
+                preferences.activeCleanupSelection = .prompt(first.id)
+                preferences.cleanupPrompt = first.instructions
+                preferences.cleanupPromptMode = .custom
+            }
+            preferencesModel.savePreferencesImmediately()
+            return .success(result)
+        } catch let error {
+            return .failure(error)
+        }
     }
 
     var differsFromDefault: Bool {

@@ -305,6 +305,21 @@ final class AppStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testPromptLibraryImportMergesPromptsAndSelectsTheFirstWhenNeeded() {
+        let imported = CleanupPrompt(name: "Writing", systemImageName: "quote.bubble", instructions: "Improve writing.")
+        let context = makeContext(
+            preferences: AppPreferences(cleanupPrompts: [], activeCleanupSelection: nil),
+            cleanupPromptExportReader: PromptLibraryExportReaderSpy(result: .success(CleanupPromptExport(prompts: [imported])))
+        )
+
+        let result = context.model.importCleanupPrompts(from: URL(fileURLWithPath: "/tmp/prompts.json"))
+
+        XCTAssertEqual(try? result.get().importedPrompts, [imported])
+        XCTAssertEqual(context.model.preferences.cleanupPrompts, [imported])
+        XCTAssertEqual(context.model.preferences.activeCleanupSelection, .prompt(imported.id))
+    }
+
+    @MainActor
     func testDeletingPromptPrunesWorkflowReferencesAndRepairsActiveSelection() {
         let defaultPrompt = CleanupPrompt(
             id: AppPreferences.defaultCleanupPromptID,
@@ -865,6 +880,7 @@ final class AppStoreTests: XCTestCase {
         permissions: PermissionSpy = PermissionSpy(),
         modelCatalog: any RemoteModelDiscovering = ModelCatalogSpy(),
         audioCaptureTrimmingResources: any AudioCaptureTrimmingResourceManaging = UnavailableAudioCaptureTrimmingResourceManager(),
+        cleanupPromptExportReader: any CleanupPromptExportReading = PromptLibraryExportReaderSpy(result: .failure(.unreadableFile)),
         codexCredentials: any CodexCredentialsStoring & CodexAccessTokenProviding = CodexCredentialStoreSpy(),
         codexAuthenticator: any CodexAuthenticating = CodexAuthenticatorSpy()
     ) -> AppContext {
@@ -903,6 +919,7 @@ final class AppStoreTests: XCTestCase {
             coordinator: coordinator,
             connectionTest: connectionTest,
             textDelivery: delivery,
+            cleanupPromptExportReader: cleanupPromptExportReader,
             preferencesStore: preferencesStore,
             keychain: secretStore,
             codexCredentials: codexCredentials,
@@ -944,6 +961,14 @@ final class AppStoreTests: XCTestCase {
         value.selectedTTTProviderID = .remote(cleanup.id)
         value.cleanupEnabled = true
         return value
+    }
+}
+
+private struct PromptLibraryExportReaderSpy: CleanupPromptExportReading {
+    let result: Result<CleanupPromptExport, CleanupPromptImportError>
+
+    func readExport(at _: URL) throws(CleanupPromptImportError) -> CleanupPromptExport {
+        try result.get()
     }
 }
 

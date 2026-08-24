@@ -248,7 +248,10 @@ final class AppStore {
         self.providerStore = providerStore
         let permissionsModel = PermissionsStore(provider: dependencies.permissions)
         self.permissionsModel = permissionsModel
-        let promptLibrary = PromptLibraryStore(preferencesModel: preferencesModel)
+        let promptLibrary = PromptLibraryStore(
+            preferencesModel: preferencesModel,
+            exportReader: dependencies.cleanupPromptExportReader
+        )
         self.promptLibrary = promptLibrary
         let connectionTestStore = ConnectionTestStore(
             coordinator: dependencies.connectionTest,
@@ -363,6 +366,10 @@ final class AppStore {
 
     func makeCleanupPromptExport() -> CleanupPromptExport {
         promptLibrary.makeExport()
+    }
+
+    func importCleanupPrompts(from url: URL) -> Result<CleanupPromptImportResult, CleanupPromptImportError> {
+        promptLibrary.importPrompts(from: url)
     }
 
     func resetCleanupPrompt() { resetPromptLibrary() }
