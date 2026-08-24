@@ -973,7 +973,6 @@ private struct PromptEditor: View {
             }
         }
         .formStyle(.grouped)
-        .settingsGroupedFormContentMargins()
     }
 }
 
