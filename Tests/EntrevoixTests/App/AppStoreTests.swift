@@ -256,7 +256,7 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(PermissionStatus.denied.title, "Denied")
         XCTAssertEqual(PermissionStatus.notDetermined.title, "Not allowed yet")
         XCTAssertEqual(AuthenticationMode.allCases.map(\.title), ["Bearer", "API Key", "None"])
-        XCTAssertEqual(CleanupAPIFormat.allCases.map(\.title), ["Responses API", "Chat Completions"])
+        XCTAssertEqual(CleanupAPIFormat.allCases.map(\.title), ["Responses API", "Chat Completions", "Anthropic Messages"])
         XCTAssertEqual(CleanupFailurePolicy.allCases.map(\.title), ["Use Raw Transcript", "Stop with an Error"])
         XCTAssertEqual(TriggerMode.allCases.map(\.title), ["Hold to Talk", "Press to Start/Stop"])
         XCTAssertEqual(OutputMode.allCases.map(\.title), ["Clipboard", "Insert Automatically"])

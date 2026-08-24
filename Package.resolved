@@ -1,13 +1,13 @@
 {
-  "originHash" : "51d4f2e33df6fa5634a4b9e549a43b70c0bf28f805d1a98804ecbc70a14a27de",
+  "originHash" : "f18c1f89403fd63e414112bab3e306a7a3bd62a795d51df3186fede4fa9f0ed1",
   "pins" : [
     {
       "identity" : "entrevoix-shared",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/entrevoix-app/entrevoix-shared.git",
       "state" : {
-        "revision" : "1ef7f978a50166765d4a3ec8f7432ff2b203dd29",
-        "version" : "0.1.0"
+        "revision" : "b25cdf289d85e205d1a0b78f8159bb85c8fec5a9",
+        "version" : "0.2.0"
       }
     },
     {

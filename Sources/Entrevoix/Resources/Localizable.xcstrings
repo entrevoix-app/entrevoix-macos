@@ -31,6 +31,7 @@
         "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Chat Completions" } }
       }
     },
+    "cleanup.anthropic_messages" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Anthropic Messages" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Messages Anthropic" } } } },
     "cleanup.default_prompt" : {
       "comment" : "Default TTT instruction. The cleaned text should remain in the transcript's language.",
       "localizations" : {
@@ -521,6 +522,8 @@
     "settings.stt" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "STT Transcription" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Transcription STT" } } } },
     "settings.providers" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Providers" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Fournisseurs" } } } },
     "provider.apple_local" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Apple (local)" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Apple (local)" } } } },
+    "provider.anthropic" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Anthropic" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Anthropic" } } } },
+    "provider.anthropic_ttt_only" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Anthropic is available for text cleanup only. Its endpoint and authentication are preconfigured." } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Anthropic est disponible uniquement pour le nettoyage de texte. Son endpoint et son authentification sont préconfigurés." } } } },
     "provider.add_apple" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Add Apple (local)" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Ajouter Apple (local)" } } } },
     "provider.add_openai" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Add OpenAI" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Ajouter OpenAI" } } } },
     "provider.apple_speech_onboarding_hint" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Apple Speech requires a supported, downloaded speech asset. Choose a language below." } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Apple Speech nécessite une ressource vocale compatible et téléchargée. Choisissez une langue ci-dessous." } } } },

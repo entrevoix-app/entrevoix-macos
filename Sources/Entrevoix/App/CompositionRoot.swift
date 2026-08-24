@@ -67,6 +67,7 @@ enum CompositionRoot {
         )
         let cleaner = ProviderCleanupRouter(
             remote: OpenAITextCleanupService(transport: transport),
+            anthropic: AnthropicTextCleanupService(transport: transport),
             codex: CodexCleanupService(
                 transport: transport,
                 credentialsProvider: codexCredentials
