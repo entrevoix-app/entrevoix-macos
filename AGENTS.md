@@ -163,6 +163,8 @@ When changing dependencies, preserve exact pinning unless the task explicitly ca
 
 ## Release
 
+- GitHub Release descriptions, including drafts and pre-releases, must be written in English.
+
 - `./Scripts/release.sh` requires `ENTREVOIX_VERSION`, `ENTREVOIX_BUILD_NUMBER`, `DEVELOPER_ID_CERTIFICATE_BASE64`, `DEVELOPER_ID_CERTIFICATE_PASSWORD`, `BUILD_KEYCHAIN_PASSWORD`, `APP_STORE_CONNECT_KEY_BASE64`, `APP_STORE_CONNECT_KEY_ID`, and `APP_STORE_CONNECT_ISSUER_ID`.
 - `ENTREVOIX_VERSION` is a semantic version without the `v` prefix; the Git tag uses `v`. `ENTREVOIX_BUILD_NUMBER` is the monotonic Sparkle bundle version.
 - Release builds use Hardened Runtime, the same entitlements and embedded resources as development builds, Developer ID signing, notarization, stapling, DMG creation, and SHA-256 output.
