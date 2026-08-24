@@ -82,11 +82,11 @@ struct ProvidersSettingsView: View {
                 }
             }
             .formStyle(.grouped)
-            .settingsPageContentMargins()
+            .settingsGroupedFormContentMargins()
         } else if selection == .codex, let profile = model.preferences.provider(for: .codex)?.codexProfile {
             CodexProviderEditor(model: model, profile: profile)
         } else if let draft {
-            RemoteProviderEditor(model: model, draft: binding(for: draft), apiKey: $draftKey, validation: validation, onLoadModels: { model.loadModels(for: $0) }, onSave: save, onCancel: cancel)
+            RemoteProviderEditor(model: model, draft: binding(for: draft), apiKey: $draftKey, validation: validation, onLoadModels: { model.loadModels(for: $0) }, onSave: save)
         } else {
             ContentUnavailableView(text("provider.none_selected", "No provider selected"), systemImage: "network", description: Text(text("provider.empty_description", "Add a local Apple or remote provider to begin.")))
         }
@@ -138,10 +138,6 @@ struct ProvidersSettingsView: View {
         guard let draft else { return }
         validation = model.saveRemoteProvider(draft, apiKey: draftKey)
         if validation.isEmpty { showCatalog() }
-    }
-
-    private func cancel() {
-        showCatalog()
     }
 
     private func text(_ key: String, _ fallback: String) -> String {
@@ -376,7 +372,7 @@ private struct CodexProviderEditor: View {
             }
         }
         .formStyle(.grouped)
-        .settingsPageContentMargins()
+        .settingsGroupedFormContentMargins()
     }
 
     private func text(_ key: String, _ fallback: String) -> String {
@@ -412,7 +408,6 @@ private struct RemoteProviderEditor: View {
     let validation: [ProviderValidationIssue]
     let onLoadModels: (RemoteProviderProfile) -> Void
     let onSave: () -> Void
-    let onCancel: () -> Void
 
     var body: some View {
         Form {
@@ -451,10 +446,9 @@ private struct RemoteProviderEditor: View {
                 }
             }
             if let first = validation.first { Label(first.localizedProviderValidationTitle(locale: model.interfaceLocale), systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
-            Button(text("action.cancel", "Cancel"), action: onCancel)
         }
         .formStyle(.grouped)
-        .settingsPageContentMargins()
+        .settingsGroupedFormContentMargins()
     }
 
     private func text(_ key: String, _ fallback: String) -> String {
