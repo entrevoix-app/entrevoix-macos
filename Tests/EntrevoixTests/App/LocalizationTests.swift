@@ -21,6 +21,33 @@ final class LocalizationTests: XCTestCase {
         )
     }
 
+    func testAboutVersionUsesLocalizedFormat() throws {
+        let data = try XCTUnwrap(EntrevoixLocalization.sourceCatalogData())
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try XCTUnwrap(object["strings"] as? [String: Any])
+        let entry = try XCTUnwrap(strings["settings.version"] as? [String: Any])
+        let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any])
+        let english = try localizedValue(for: "en", in: localizations)
+        let french = try localizedValue(for: "fr-FR", in: localizations)
+
+        XCTAssertEqual(
+            String(format: english, locale: Locale(identifier: "en"), arguments: ["1.2.3"]),
+            "Entrevoix 1.2.3 — MIT License"
+        )
+        XCTAssertEqual(
+            String(format: french, locale: Locale(identifier: "fr-FR"), arguments: ["1.2.3"]),
+            "Entrevoix 1.2.3 — Licence MIT"
+        )
+    }
+
+    func testMarketingVersionReadsBundleValueAndFallsBackSafely() {
+        XCTAssertEqual(
+            AppVersion.marketingVersion(in: ["CFBundleShortVersionString": "1.2.3"]),
+            "1.2.3"
+        )
+        XCTAssertEqual(AppVersion.marketingVersion(in: [:]), AppVersion.fallbackMarketingVersion)
+    }
+
     func testCatalogContainsEnglishAndFrenchRepresentativeEntries() throws {
         let data = try XCTUnwrap(EntrevoixLocalization.sourceCatalogData())
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -190,5 +217,11 @@ final class LocalizationTests: XCTestCase {
     func testUserFacingErrorKeepsProviderDetails() {
         let message = UserFacingErrorMessage.sttHTTP(statusCode: 503, providerMessage: "Provider unavailable")
         XCTAssertEqual(message.localizedText(locale: Locale(identifier: "en")), "STT error (HTTP 503).: Provider unavailable")
+    }
+
+    private func localizedValue(for locale: String, in localizations: [String: Any]) throws -> String {
+        let localization = try XCTUnwrap(localizations[locale] as? [String: Any])
+        let stringUnit = try XCTUnwrap(localization["stringUnit"] as? [String: Any])
+        return try XCTUnwrap(stringUnit["value"] as? String)
     }
 }
