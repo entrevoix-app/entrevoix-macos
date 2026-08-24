@@ -137,6 +137,8 @@ final class LocalizationTests: XCTestCase {
             "provider.models_load_failed",
             "codex.connect",
             "codex.ttt_only",
+            "prompts.actions",
+            "prompts.back_to_library",
             "error.codex_not_connected"
         ] {
             let entry = try XCTUnwrap(strings[key] as? [String: Any])

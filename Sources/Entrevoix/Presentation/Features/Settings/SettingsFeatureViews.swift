@@ -621,7 +621,7 @@ enum PromptPendingAction {
 @MainActor
 @Observable
 final class PromptLibraryNavigationState {
-    var path: [PromptDestination] = []
+    var destination: PromptDestination?
     var draft: CleanupPrompt?
     var originalDraft: CleanupPrompt?
     var validationError: CleanupPromptValidationError?
@@ -633,7 +633,7 @@ final class PromptLibraryNavigationState {
     var isDirty: Bool { draft != originalDraft }
 
     func openPrompt(_ id: UUID) {
-        path.append(.edit(id, token: UUID()))
+        destination = .edit(id, token: UUID())
     }
 
     func beginEditing(_ id: UUID, model: AppStore) {
@@ -648,6 +648,7 @@ final class PromptLibraryNavigationState {
         draft = CleanupPrompt(id: id, name: "", systemImageName: "sparkles", instructions: "")
         originalDraft = nil
         validationError = nil
+        destination = .create(id)
     }
 
     @discardableResult
@@ -670,7 +671,7 @@ final class PromptLibraryNavigationState {
     }
 
     func resetTransientState() {
-        path.removeAll()
+        destination = nil
         draft = nil
         originalDraft = nil
         validationError = nil
@@ -688,11 +689,12 @@ struct PromptLibraryView: View {
 
     var body: some View {
         let locale = model.interfaceLocale
-        NavigationStack(path: $state.path) {
+        Group {
+            if let destination = state.destination {
+                PromptEditorPage(model: model, state: state, destination: destination)
+            } else {
             PromptListPage(model: model, state: state)
-                .navigationDestination(for: PromptDestination.self) { destination in
-                    PromptEditorPage(model: model, state: state, destination: destination)
-                }
+            }
         }
         .alert(EntrevoixLocalization.text("prompts.unsaved_title", defaultValue: "Unsaved changes", locale: locale), isPresented: $state.showUnsavedConfirmation) {
             Button(EntrevoixLocalization.text("action.save", defaultValue: "Save", locale: locale)) {
@@ -726,7 +728,7 @@ struct PromptLibraryView: View {
         state.pendingAction = nil
         switch action {
         case .back:
-            state.path.removeLast()
+            state.resetTransientState()
         case .leaveSettings(let section):
             state.resetTransientState()
             onLeaveSettings(section)
@@ -822,7 +824,6 @@ private struct PromptListPage: View {
                 Button {
                     let id = UUID()
                     state.beginCreating(id)
-                    state.path.append(.create(id))
                 } label: {
                     Label(
                         EntrevoixLocalization.text("prompts.add", defaultValue: "Add", locale: locale),
@@ -854,12 +855,34 @@ private struct PromptEditorPage: View {
         .navigationTitle(isExistingPrompt
             ? EntrevoixLocalization.text("prompts.edit_title", defaultValue: "Edit Prompt", locale: locale)
             : EntrevoixLocalization.text("prompts.new_title", defaultValue: "New Prompt", locale: locale))
-        .navigationBarBackButtonHidden(true)
         .toolbar {
-            ToolbarItem(placement: ToolbarItemPlacement.navigation) {
+            ToolbarItem(placement: .navigation) {
                 Button(action: requestBack) {
-                    Image(systemName: "chevron.left")
-                        .accessibilityLabel(EntrevoixLocalization.text("action.back", defaultValue: "Back", locale: locale))
+                    Label(
+                        EntrevoixLocalization.text("prompts.back_to_library", defaultValue: "All prompts", locale: locale),
+                        systemImage: "chevron.left"
+                    )
+                }
+            }
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button(EntrevoixLocalization.text("action.save", defaultValue: "Save", locale: locale), action: saveAndReturn)
+                if isExistingPrompt {
+                    Menu {
+                        Button(role: .destructive) {
+                            requestDelete()
+                        } label: {
+                            Label(
+                                EntrevoixLocalization.text("prompts.delete", defaultValue: "Delete", locale: locale),
+                                systemImage: "trash"
+                            )
+                        }
+                    } label: {
+                        Label(
+                            EntrevoixLocalization.text("prompts.actions", defaultValue: "Prompt actions", locale: locale),
+                            systemImage: "ellipsis.circle"
+                        )
+                    }
+                    .menuStyle(.button)
                 }
             }
         }
@@ -884,14 +907,10 @@ private struct PromptEditorPage: View {
 
     @ViewBuilder
     private func editorContent(locale: Locale) -> some View {
-        if state.draft != nil {
+        if let draft = state.draft {
             PromptEditor(
-                draft: Binding(get: { state.draft! }, set: { state.draft = $0 }),
+                draft: Binding(get: { state.draft ?? draft }, set: { state.draft = $0 }),
                 error: $state.validationError,
-                onSave: saveAndReturn,
-                onCancel: requestCancel,
-                onDelete: requestDelete,
-                showsDelete: isExistingPrompt,
                 locale: locale
             )
         } else {
@@ -904,11 +923,7 @@ private struct PromptEditorPage: View {
 
     private func saveAndReturn() {
         guard state.save(model: model) else { return }
-        state.path.removeLast()
-    }
-
-    private func requestCancel() {
-        requestBack()
+        state.resetTransientState()
     }
 
     private func requestBack() {
@@ -916,8 +931,7 @@ private struct PromptEditorPage: View {
             state.pendingAction = .back
             state.showUnsavedConfirmation = true
         } else {
-            state.discard()
-            state.path.removeLast()
+            state.resetTransientState()
         }
     }
 
@@ -935,10 +949,6 @@ private struct PromptEditorPage: View {
 private struct PromptEditor: View {
     @Binding var draft: CleanupPrompt
     @Binding var error: CleanupPromptValidationError?
-    let onSave: () -> Void
-    let onCancel: () -> Void
-    let onDelete: () -> Void
-    let showsDelete: Bool
     let locale: Locale
 
     var body: some View {
@@ -960,19 +970,6 @@ private struct PromptEditor: View {
                     Label(error.message(locale: locale), systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.orange)
                 }
-            }
-            if showsDelete {
-                Section {
-                    Button(role: .destructive, action: onDelete) {
-                        Label(EntrevoixLocalization.text("prompts.delete", defaultValue: "Delete", locale: locale), systemImage: "trash")
-                    }
-                }
-            }
-            HStack {
-                Spacer()
-                Button(EntrevoixLocalization.text("action.cancel", defaultValue: "Cancel", locale: locale), action: onCancel)
-                Button(EntrevoixLocalization.text("action.save", defaultValue: "Save", locale: locale), action: onSave)
-                    .buttonStyle(.borderedProminent)
             }
         }
         .formStyle(.grouped)
