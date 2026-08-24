@@ -162,6 +162,25 @@ final class AppStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testDownloadsAudioTrimmingResourceOnlyWhenRequested() async {
+        let resources = AppAudioCaptureTrimmingResourceManagerSpy(state: .downloadRequired)
+        let context = makeContext(audioCaptureTrimmingResources: resources)
+
+        await appWaitUntil("audio trimming resource status") {
+            context.model.audioCaptureTrimmingResourceState == .downloadRequired
+        }
+        let initialDownloads = await resources.downloadLocales
+        XCTAssertTrue(initialDownloads.isEmpty)
+
+        context.model.downloadAudioCaptureTrimmingResource()
+        await appWaitUntil("audio trimming resource download") {
+            context.model.audioCaptureTrimmingResourceState == .ready
+        }
+        let downloadedLocales = await resources.downloadLocales
+        XCTAssertEqual(downloadedLocales.count, 1)
+    }
+
+    @MainActor
     func testActiveSTTLanguageCannotBeRemovedFromFavorites() {
         var preferences = AppPreferences()
         preferences.sttLanguage = .french
@@ -836,6 +855,7 @@ final class AppStoreTests: XCTestCase {
         secrets: [UUID: String]? = nil,
         permissions: PermissionSpy = PermissionSpy(),
         modelCatalog: any RemoteModelDiscovering = ModelCatalogSpy(),
+        audioCaptureTrimmingResources: any AudioCaptureTrimmingResourceManaging = UnavailableAudioCaptureTrimmingResourceManager(),
         codexCredentials: any CodexCredentialsStoring & CodexAccessTokenProviding = CodexCredentialStoreSpy(),
         codexAuthenticator: any CodexAuthenticating = CodexAuthenticatorSpy()
     ) -> AppContext {
@@ -879,6 +899,7 @@ final class AppStoreTests: XCTestCase {
             codexCredentials: codexCredentials,
             codexAuthenticator: codexAuthenticator,
             modelCatalog: modelCatalog,
+            audioCaptureTrimmingResources: audioCaptureTrimmingResources,
             hotkeys: hotkeys,
             launchAtLogin: launch,
             feedback: feedback,

@@ -1,11 +1,34 @@
 import AVFoundation
 import CoreMedia
 import EntrevoixCore
+import Speech
 import XCTest
 @testable import Entrevoix
 
 @MainActor
 final class AudioRecorderTests: XCTestCase {
+    func testSpeechTrimUsesWordTimeRangesInsteadOfFinalizationRange() {
+        var spoken = AttributedString("speech")
+        spoken[AttributeScopes.SpeechAttributes.TimeRangeAttribute.self] = CMTimeRange(
+            start: CMTime(seconds: 1, preferredTimescale: 1_000),
+            duration: CMTime(seconds: 2, preferredTimescale: 1_000)
+        )
+        var finalizationMarker = AttributedString(" ")
+        finalizationMarker[AttributeScopes.SpeechAttributes.TimeRangeAttribute.self] = CMTimeRange(
+            start: CMTime(seconds: 8, preferredTimescale: 1_000),
+            duration: .zero
+        )
+        spoken.append(finalizationMarker)
+
+        XCTAssertEqual(
+            AppleSpeechAudioCaptureTrimmer.wordTimeRanges(in: spoken),
+            [CMTimeRange(
+                start: CMTime(seconds: 1, preferredTimescale: 1_000),
+                duration: CMTime(seconds: 2, preferredTimescale: 1_000)
+            )]
+        )
+    }
+
     func testCaptureEngineIsReusedWithoutVoiceProcessing() throws {
         let engine = AudioCaptureEngineSpy()
         let factory = AudioCaptureEngineFactorySpy(engines: [engine])

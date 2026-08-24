@@ -38,9 +38,16 @@ struct GeneralSettingsView: View {
                         defaultValue: "Remove silence before and after speech",
                         locale: locale
                     ),
-                    isOn: $model.preferences.trimLeadingAndTrailingSilence
+                    isOn: Binding(
+                        get: { model.preferences.trimLeadingAndTrailingSilence },
+                        set: { model.setTrimLeadingAndTrailingSilence($0) }
+                    )
                 )
                 .toggleStyle(.checkbox)
+
+                if model.preferences.trimLeadingAndTrailingSilence {
+                    AudioCaptureTrimmingResourceControl(model: model, locale: locale)
+                }
 
                 Picker(
                     EntrevoixLocalization.text("field.audio_input", defaultValue: "Microphone", locale: locale),
@@ -129,6 +136,9 @@ struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .settingsGroupedFormContentMargins()
+        .task(id: model.preferences.sttLanguage) {
+            model.refreshAudioCaptureTrimmingResourceState()
+        }
         .alert(
             updateConfirmationTitle(locale: locale),
             isPresented: Binding(
@@ -989,6 +999,88 @@ private struct PromptEditor: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+private struct AudioCaptureTrimmingResourceControl: View {
+    @Bindable var model: AppStore
+    let locale: Locale
+
+    var body: some View {
+        switch model.audioCaptureTrimmingResourceState {
+        case .checking:
+            ProgressView(EntrevoixLocalization.text(
+                "settings.trim_resource_checking",
+                defaultValue: "Checking local speech resource…",
+                locale: locale
+            ))
+                .controlSize(.small)
+        case .downloadRequired, .failed:
+            HStack {
+                Label(
+                    resourceStatusTitle,
+                    systemImage: "exclamationmark.triangle"
+                )
+                .foregroundStyle(.orange)
+                .font(.caption)
+                Button(EntrevoixLocalization.text(
+                    "settings.trim_resource_download",
+                    defaultValue: "Download resource",
+                    locale: locale
+                )) {
+                    model.downloadAudioCaptureTrimmingResource()
+                }
+                .buttonStyle(.bordered)
+            }
+        case .downloading:
+            ProgressView(EntrevoixLocalization.text(
+                "settings.trim_resource_downloading",
+                defaultValue: "Downloading local speech resource…",
+                locale: locale
+            ))
+                .controlSize(.small)
+        case .ready:
+            Label(
+                EntrevoixLocalization.text(
+                    "settings.trim_resource_ready",
+                    defaultValue: "Local speech resource is ready.",
+                    locale: locale
+                ),
+                systemImage: "checkmark.circle"
+            )
+            .foregroundStyle(.secondary)
+            .font(.caption)
+        case .unsupported:
+            Label(
+                EntrevoixLocalization.text(
+                    "settings.trim_resource_unsupported",
+                    defaultValue: "No local speech resource is available for this language.",
+                    locale: locale
+                ),
+                systemImage: "exclamationmark.triangle"
+            )
+            .foregroundStyle(.orange)
+            .font(.caption)
+        }
+    }
+
+    private var resourceStatusTitle: String {
+        switch model.audioCaptureTrimmingResourceState {
+        case .downloadRequired:
+            EntrevoixLocalization.text(
+                "settings.trim_resource_required",
+                defaultValue: "A local speech resource is required to remove silence.",
+                locale: locale
+            )
+        case .failed:
+            EntrevoixLocalization.text(
+                "settings.trim_resource_failed",
+                defaultValue: "The local speech resource could not be downloaded.",
+                locale: locale
+            )
+        default:
+            ""
+        }
     }
 }
 

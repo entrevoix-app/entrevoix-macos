@@ -17,6 +17,37 @@ public protocol AudioCaptureTrimming: Sendable {
     ) async -> AudioCaptureTrimResult
 }
 
+public enum AudioCaptureTrimmingResourceState: Equatable, Sendable {
+    case checking
+    case unsupported
+    case downloadRequired
+    case downloading
+    case ready
+    case failed
+}
+
+/// Manages the local Apple Speech resource used to identify timed speech ranges.
+public protocol AudioCaptureTrimmingResourceManaging: Sendable {
+    func preparationState(for requestedLocale: Locale) async -> AudioCaptureTrimmingResourceState
+    func download(for requestedLocale: Locale) async throws
+}
+
+public struct UnavailableAudioCaptureTrimmingResourceManager: AudioCaptureTrimmingResourceManaging {
+    public init() {}
+
+    public func preparationState(for requestedLocale: Locale) async -> AudioCaptureTrimmingResourceState {
+        .unsupported
+    }
+
+    public func download(for requestedLocale: Locale) async throws {
+        throw ResourceError.unavailable
+    }
+
+    public enum ResourceError: Error, Sendable {
+        case unavailable
+    }
+}
+
 /// Default behavior used when no platform audio processor is assembled.
 public struct PassthroughAudioCaptureTrimmer: AudioCaptureTrimming {
     public init() {}

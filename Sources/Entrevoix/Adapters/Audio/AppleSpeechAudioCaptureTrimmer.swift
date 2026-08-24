@@ -60,12 +60,19 @@ actor AppleSpeechAudioCaptureTrimmer: AudioCaptureTrimming {
     ) async throws -> [CMTimeRange] {
         var ranges: [CMTimeRange] = []
         for try await result in transcriber.results where result.isFinal {
-            guard !String(result.text.characters)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .isEmpty else { continue }
-            ranges.append(result.range)
+            ranges.append(contentsOf: Self.wordTimeRanges(in: result.text))
         }
         return ranges
+    }
+
+    /// The result range covers an analysis/finalization segment and may include
+    /// trailing silence. The time-indexed text attributes identify spoken words.
+    static func wordTimeRanges(in text: AttributedString) -> [CMTimeRange] {
+        text.runs.compactMap { run in
+            guard let range = run[AttributeScopes.SpeechAttributes.TimeRangeAttribute.self],
+                  !range.isEmpty else { return nil }
+            return range
+        }
     }
 
     static func trimBounds(
@@ -124,4 +131,52 @@ actor AppleSpeechAudioCaptureTrimmer: AudioCaptureTrimming {
             throw error
         }
     }
+}
+
+actor AppleSpeechAudioCaptureTrimmingResourceManager: AudioCaptureTrimmingResourceManaging {
+    func preparationState(for requestedLocale: Locale) async -> AudioCaptureTrimmingResourceState {
+        guard let transcriber = await makeTranscriber(for: requestedLocale) else {
+            return .unsupported
+        }
+
+        switch await AssetInventory.status(forModules: [transcriber]) {
+        case .installed:
+            return .ready
+        case .downloading:
+            return .downloading
+        case .supported:
+            return .downloadRequired
+        case .unsupported:
+            return .unsupported
+        @unknown default:
+            return .failed
+        }
+    }
+
+    func download(for requestedLocale: Locale) async throws {
+        guard let transcriber = await makeTranscriber(for: requestedLocale) else {
+            throw AudioCaptureTrimmingResourceError.unsupportedLocale
+        }
+        guard let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) else {
+            return
+        }
+        try Task.checkCancellation()
+        try await request.downloadAndInstall()
+        try Task.checkCancellation()
+        guard await AssetInventory.status(forModules: [transcriber]) == .installed else {
+            throw AudioCaptureTrimmingResourceError.installationIncomplete
+        }
+    }
+
+    private func makeTranscriber(for requestedLocale: Locale) async -> DictationTranscriber? {
+        guard let locale = await DictationTranscriber.supportedLocale(equivalentTo: requestedLocale) else {
+            return nil
+        }
+        return DictationTranscriber(locale: locale, preset: .timeIndexedLongDictation)
+    }
+}
+
+private enum AudioCaptureTrimmingResourceError: Error, Sendable {
+    case unsupportedLocale
+    case installationIncomplete
 }

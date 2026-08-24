@@ -77,6 +77,32 @@ actor AppAudioCaptureTrimmerSpy: AudioCaptureTrimming {
     }
 }
 
+actor AppAudioCaptureTrimmingResourceManagerSpy: AudioCaptureTrimmingResourceManaging {
+    private(set) var preparationLocales: [Locale] = []
+    private(set) var downloadLocales: [Locale] = []
+    var state: AudioCaptureTrimmingResourceState
+    var downloadResult: Result<Void, AppStubError>
+
+    init(
+        state: AudioCaptureTrimmingResourceState,
+        downloadResult: Result<Void, AppStubError> = .success(())
+    ) {
+        self.state = state
+        self.downloadResult = downloadResult
+    }
+
+    func preparationState(for requestedLocale: Locale) async -> AudioCaptureTrimmingResourceState {
+        preparationLocales.append(requestedLocale)
+        return state
+    }
+
+    func download(for requestedLocale: Locale) async throws {
+        downloadLocales.append(requestedLocale)
+        try downloadResult.get()
+        state = .ready
+    }
+}
+
 @MainActor
 final class AudioInputDeviceCatalogSpy: AudioInputDeviceDiscovering {
     var onInputDevicesChanged: (() -> Void)?

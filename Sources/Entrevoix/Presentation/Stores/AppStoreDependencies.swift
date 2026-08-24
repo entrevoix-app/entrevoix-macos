@@ -11,6 +11,7 @@ struct AppStoreDependencies {
     let codexCredentials: any CodexCredentialsStoring & CodexAccessTokenProviding
     let codexAuthenticator: any CodexAuthenticating
     let modelCatalog: any RemoteModelDiscovering
+    let audioCaptureTrimmingResources: any AudioCaptureTrimmingResourceManaging
     let providerAlerts: any ProviderAlertPresenting
     let hotkeys: any HotkeyHandling
     let launchAtLogin: any LaunchAtLoginControlling
@@ -31,6 +32,7 @@ struct AppStoreDependencies {
         codexCredentials: any CodexCredentialsStoring & CodexAccessTokenProviding = UnavailableCodexCredentialsStore(),
         codexAuthenticator: any CodexAuthenticating = UnavailableCodexAuthenticator(),
         modelCatalog: any RemoteModelDiscovering = UnavailableModelCatalog(),
+        audioCaptureTrimmingResources: any AudioCaptureTrimmingResourceManaging = UnavailableAudioCaptureTrimmingResourceManager(),
         providerAlerts: any ProviderAlertPresenting = makeNoOpProviderAlertPresenter(),
         hotkeys: any HotkeyHandling,
         launchAtLogin: any LaunchAtLoginControlling,
@@ -43,7 +45,7 @@ struct AppStoreDependencies {
         now: @escaping () -> Date
     ) {
         self.coordinator = coordinator; self.connectionTest = connectionTest; self.textDelivery = textDelivery
-        self.preferencesStore = preferencesStore; self.keychain = keychain; self.codexCredentials = codexCredentials; self.codexAuthenticator = codexAuthenticator; self.modelCatalog = modelCatalog; self.providerAlerts = providerAlerts
+        self.preferencesStore = preferencesStore; self.keychain = keychain; self.codexCredentials = codexCredentials; self.codexAuthenticator = codexAuthenticator; self.modelCatalog = modelCatalog; self.audioCaptureTrimmingResources = audioCaptureTrimmingResources; self.providerAlerts = providerAlerts
         self.hotkeys = hotkeys; self.launchAtLogin = launchAtLogin; self.feedback = feedback
         self.listeningIndicator = listeningIndicator; self.permissions = permissions; self.audioInputDevices = audioInputDevices; self.updater = updater; self.logStore = logStore
         self.now = now

@@ -74,6 +74,7 @@ enum CompositionRoot {
         let textDelivery = TextDelivery()
         let sessionArbiter = SessionArbiter()
         let audioCaptureTrimmer = AppleSpeechAudioCaptureTrimmer()
+        let audioCaptureTrimmingResources = AppleSpeechAudioCaptureTrimmingResourceManager()
 
         let coordinator = DictationCoordinator(
             dependencies: DictationDependencies(
@@ -106,6 +107,7 @@ enum CompositionRoot {
             codexCredentials: codexCredentials,
             codexAuthenticator: CodexBrowserAuthenticator(),
             modelCatalog: RemoteModelCatalogClient(transport: transport),
+            audioCaptureTrimmingResources: audioCaptureTrimmingResources,
             providerAlerts: QueuedProviderAlertPresenter(),
             hotkeys: HotkeyService(),
             launchAtLogin: LaunchAtLoginService(),
