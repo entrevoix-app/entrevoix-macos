@@ -19,6 +19,8 @@ struct CodexCleanupService: TextCleaning {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CodexCleanupError.emptyInput }
         let policy = request.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !policy.isEmpty else { throw CodexCleanupError.emptyPrompt }
+        let instructions = CleanupTransformationPolicy.systemInstructions
+        let input = CleanupTransformationPolicy.input(instructions: policy, transcript: text)
 
         let credentials = try await credentialsProvider.validCredentials()
         var urlRequest = URLRequest(url: CodexProtocol.responsesEndpoint)
@@ -36,8 +38,8 @@ struct CodexCleanupService: TextCleaning {
         }
         urlRequest.httpBody = try JSONEncoder().encode(CodexResponsesRequest(
             model: request.configuration.model,
-            instructions: CleanupTransformationPolicy.instructions(for: policy),
-            input: text,
+            instructions: instructions,
+            input: input,
             store: false
         ))
 
@@ -50,7 +52,8 @@ struct CodexCleanupService: TextCleaning {
             result: result,
             transcript: text,
             cleanupPolicy: policy,
-            instructions: CleanupTransformationPolicy.instructions(for: policy)
+            systemInstructions: instructions,
+            input: input
         ) {
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
         }

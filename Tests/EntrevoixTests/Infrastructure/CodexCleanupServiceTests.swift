@@ -40,7 +40,11 @@ final class CodexCleanupServiceTests: XCTestCase {
         XCTAssertEqual(request.value(forHTTPHeaderField: "x-openai-internal-codex-residency"), "eu")
         let body = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(request.httpBody)) as? [String: Any])
         XCTAssertEqual(body["model"] as? String, "gpt-5.6-luna")
-        XCTAssertEqual(body["input"] as? String, "raw text")
+        XCTAssertEqual(body["instructions"] as? String, CleanupTransformationPolicy.systemInstructions)
+        XCTAssertEqual(
+            body["input"] as? String,
+            CleanupTransformationPolicy.input(instructions: "Clean it.", transcript: "raw text")
+        )
         XCTAssertEqual(body["store"] as? Bool, false)
     }
 
