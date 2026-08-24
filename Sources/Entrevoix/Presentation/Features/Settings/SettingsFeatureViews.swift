@@ -1,3 +1,4 @@
+import AppKit
 import KeyboardShortcuts
 import EntrevoixCore
 import Observation
@@ -964,7 +965,12 @@ private struct PromptEditor: View {
             Section(EntrevoixLocalization.text("prompts.instructions", defaultValue: "Instructions", locale: locale)) {
                 TextEditor(text: $draft.instructions)
                     .font(.body)
-                    .frame(minHeight: 220)
+                    .padding(SettingsLayout.promptInstructionsEditorInset)
+                    .frame(height: SettingsLayout.promptInstructionsEditorHeight)
+                    .background(
+                        Color(nsColor: .textBackgroundColor),
+                        in: RoundedRectangle(cornerRadius: 6)
+                    )
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(.separator, lineWidth: 1))
                 if let error {
                     Label(error.message(locale: locale), systemImage: "exclamationmark.triangle")
