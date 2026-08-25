@@ -18,12 +18,20 @@ compiled_assets_path="$contents_path/Resources/Assets.car"
 keyboard_shortcuts_bundle="$contents_path/Resources/KeyboardShortcuts_KeyboardShortcuts.bundle"
 binary_directory="$application_path:h"
 raw_resource_bundle="$binary_directory/Entrevoix_Entrevoix.bundle"
-disabled_resource_bundle="$raw_resource_bundle.integration-disabled"
+disabled_resource_directory=$(mktemp -d "$binary_directory/.entrevoix-localization-verification.XXXXXX")
+disabled_resource_bundle="$disabled_resource_directory/Entrevoix_Entrevoix.bundle"
 
 restore_raw_bundle() {
-    if [[ -d "$disabled_resource_bundle" && ! -e "$raw_resource_bundle" ]]; then
-        /bin/mv "$disabled_resource_bundle" "$raw_resource_bundle"
+    local original_status=$?
+    if [[ -d "$disabled_resource_bundle" ]]; then
+        if [[ ! -e "$raw_resource_bundle" ]]; then
+            /bin/mv "$disabled_resource_bundle" "$raw_resource_bundle"
+        else
+            /bin/rm -rf -- "$disabled_resource_bundle"
+        fi
     fi
+    /bin/rmdir "$disabled_resource_directory" 2>/dev/null || true
+    exit "$original_status"
 }
 trap restore_raw_bundle EXIT
 
@@ -59,15 +67,65 @@ if ! /usr/bin/otool -l "$executable_path" | /usr/bin/grep -A3 'cmd LC_RPATH' | /
 fi
 
 /usr/bin/codesign --verify --deep --strict "$application_path"
+/usr/bin/codesign --verify --deep --strict "$contents_path/Frameworks/Sparkle.framework"
 
 entitlements_output=$(/usr/bin/codesign -d --entitlements :- "$application_path" 2>/dev/null || true)
+if [[ "${ENTREVOIX_REQUIRE_ICLOUD_PROVISIONING_PROFILE:-0}" == "1" ]]; then
+    application_team_identifier=$(
+        /usr/bin/codesign -dvv "$application_path" 2>&1 \
+            | /usr/bin/sed -n 's/^TeamIdentifier=//p'
+    )
+    sparkle_team_identifier=$(
+        /usr/bin/codesign -dvv "$sparkle_binary" 2>&1 \
+            | /usr/bin/sed -n 's/^TeamIdentifier=//p'
+    )
+    if [[ -z "$application_team_identifier" || "$application_team_identifier" != "$sparkle_team_identifier" ]]; then
+        print -u2 "Entrevoix and Sparkle.framework must use the same Team ID."
+        exit 1
+    fi
+fi
+
 if ! print -r -- "$entitlements_output" | /usr/bin/grep -Fq '<key>com.apple.security.device.audio-input</key>'; then
     print -u2 "Entrevoix is missing the microphone audio-input entitlement."
     exit 1
 fi
 
+if [[ "${ENTREVOIX_REQUIRE_ICLOUD_PROVISIONING_PROFILE:-0}" == "1" ]]; then
+    provisioning_profile="$contents_path/embedded.provisionprofile"
+    [[ -f "$provisioning_profile" ]] || {
+        print -u2 "Entrevoix is missing its embedded provisioning profile."
+        exit 1
+    }
+    cloudkit_container='iCloud.app.entrevoix.shared'
+    signed_cloudkit_environment=$(print -r -- "$entitlements_output" | /usr/bin/xmllint --xpath 'string(//key[.="com.apple.developer.icloud-container-environment"]/following-sibling::string[1])' -)
+    if [[ "$signed_cloudkit_environment" == "Development" ]]; then
+        cloudkit_container_entitlement='com.apple.developer.icloud-container-development-container-identifiers'
+    else
+        cloudkit_container_entitlement='com.apple.developer.icloud-container-identifiers'
+    fi
+    profile_cloudkit_container_count=$(
+        /usr/bin/security cms -D -i "$provisioning_profile" \
+            | /usr/bin/xmllint --xpath "count(//key[.=\"$cloudkit_container_entitlement\"]/following-sibling::array[1]/string[.=\"$cloudkit_container\"])" -
+    )
+    signed_cloudkit_container_count=$(print -r -- "$entitlements_output" | /usr/bin/xmllint --xpath "count(//key[.=\"$cloudkit_container_entitlement\"]/following-sibling::array[1]/string[.=\"$cloudkit_container\"])" -)
+    signed_cloudkit_service_count=$(print -r -- "$entitlements_output" | /usr/bin/xmllint --xpath 'count(//key[.="com.apple.developer.icloud-services"]/following-sibling::array[1]/string[.="CloudKit"])' -)
+    profile_cloudkit_environment_count=$(
+        /usr/bin/security cms -D -i "$provisioning_profile" \
+            | /usr/bin/xmllint --xpath "count(//key[.='com.apple.developer.icloud-container-environment']/following-sibling::string[1][.='$signed_cloudkit_environment'] | //key[.='com.apple.developer.icloud-container-environment']/following-sibling::array[1]/string[.='$signed_cloudkit_environment'])" -
+    )
+    profile_application_identifier=$(
+        /usr/bin/security cms -D -i "$provisioning_profile" \
+            | /usr/bin/xmllint --xpath 'string(//key[.="com.apple.application-identifier"]/following-sibling::string[1])' -
+    )
+    signed_application_identifier=$(print -r -- "$entitlements_output" | /usr/bin/xmllint --xpath 'string(//key[.="com.apple.application-identifier"]/following-sibling::string[1])' -)
+    if [[ "$profile_cloudkit_container_count" != "1" || "$signed_cloudkit_container_count" != "1" || "$signed_cloudkit_service_count" != "1" || "$profile_cloudkit_environment_count" != "1" || "$profile_application_identifier" != "$signed_application_identifier" ]]; then
+        print -u2 "Entrevoix and its provisioning profile must authorize the selected CloudKit environment and container '$cloudkit_container'."
+        exit 1
+    fi
+fi
+
 if [[ -d "$raw_resource_bundle" && "$raw_resource_bundle" != "$contents_path/Resources/Entrevoix_Entrevoix.bundle" ]]; then
-    /bin/mv "$raw_resource_bundle" "$disabled_resource_bundle"
+    /bin/mv "$raw_resource_bundle" "$disabled_resource_directory/"
 fi
 
 executable_output() {
@@ -79,7 +137,10 @@ assert_output() {
     local expected="$2"
     shift 2
     local actual
-    actual="$(executable_output "$mode" "$@")"
+    if ! actual="$(executable_output "$mode" "$@")"; then
+        print -u2 "Localization verification could not run for $mode."
+        exit 1
+    fi
     if [[ "$actual" != "$expected" ]]; then
         print -u2 "Unexpected localization output for $mode:"
         print -u2 "$actual"

@@ -5,6 +5,7 @@ set -euo pipefail
 version=${ENTREVOIX_VERSION:-}
 build_number=${ENTREVOIX_BUILD_NUMBER:-1}
 signing_identity=${ENTREVOIX_SIGNING_IDENTITY:--}
+provisioning_profile_path=${ENTREVOIX_PROVISIONING_PROFILE_PATH:-}
 
 if [[ ! "$version" =~ '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$' ]]; then
     print -u2 "ENTREVOIX_VERSION must use the x.y.z format."
@@ -103,16 +104,40 @@ if [[ -d "$resource_bundle" ]]; then
     /usr/bin/ditto "$resource_bundle" "$contents_path/Resources/KeyboardShortcuts_KeyboardShortcuts.bundle"
 fi
 
+if [[ -z "$provisioning_profile_path" || ! -f "$provisioning_profile_path" ]]; then
+    print -u2 "A Developer ID provisioning profile is required when signing an app with iCloud entitlements."
+    exit 1
+fi
+if [[ "$signing_identity" != "-" ]]; then
+    profile_signing_identity=$("$repository_directory/Scripts/resolve-provisioning-profile-identity.sh" "$provisioning_profile_path")
+    if [[ "$signing_identity" != "$profile_signing_identity" ]]; then
+        print -u2 "ENTREVOIX_SIGNING_IDENTITY must match the Developer ID certificate authorized by the provisioning profile ($profile_signing_identity)."
+        exit 1
+    fi
+fi
+/bin/cp "$provisioning_profile_path" "$contents_path/embedded.provisionprofile"
+signing_entitlements_path="$staging_directory/Entrevoix.entitlements"
+"$repository_directory/Scripts/resolve-signing-entitlements.sh" \
+    "$repository_directory/Configuration/Entrevoix.entitlements" \
+    "$provisioning_profile_path" \
+    "$signing_entitlements_path"
+
 if [[ "$signing_identity" == "-" ]]; then
-    /usr/bin/codesign --force --deep --sign - \
-        --entitlements "$repository_directory/Configuration/Entrevoix.entitlements" \
+    /usr/bin/codesign --force --deep --sign - "$contents_path/Frameworks/Sparkle.framework"
+    /usr/bin/codesign --force --sign - \
+        --entitlements "$signing_entitlements_path" \
         "$application_path"
 else
+    # Sign embedded code before the enclosing app. Re-signing the app deeply can
+    # leave Sparkle with a different Team ID, which dyld refuses to load.
     /usr/bin/codesign --force --deep --options runtime --timestamp --sign "$signing_identity" \
-        --entitlements "$repository_directory/Configuration/Entrevoix.entitlements" \
+        "$contents_path/Frameworks/Sparkle.framework"
+    /usr/bin/codesign --force --options runtime --timestamp --sign "$signing_identity" \
+        --entitlements "$signing_entitlements_path" \
         "$application_path"
 fi
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$application_path"
+export ENTREVOIX_REQUIRE_ICLOUD_PROVISIONING_PROFILE=1
 "$repository_directory/Scripts/verify-app-bundle.sh" "$application_path"
 
 /bin/mv "$application_path" "$staging_directory/Entrevoix.app"

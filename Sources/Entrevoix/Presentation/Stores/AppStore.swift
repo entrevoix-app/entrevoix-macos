@@ -12,6 +12,7 @@ final class AppStore {
     let providerStore: ProviderStore
     let permissionsModel: PermissionsStore
     let promptLibrary: PromptLibraryStore
+    private let cleanupLibraryCloudSync: CleanupLibraryCloudSync
     let updates: UpdateStore
     private let launchAtLoginService: any LaunchAtLoginControlling
     let logStore: AppLogStore
@@ -248,11 +249,34 @@ final class AppStore {
         self.providerStore = providerStore
         let permissionsModel = PermissionsStore(provider: dependencies.permissions)
         self.permissionsModel = permissionsModel
+        let cleanupLibraryCloudSync = dependencies.cleanupLibraryCloudSync
+        self.cleanupLibraryCloudSync = cleanupLibraryCloudSync
         let promptLibrary = PromptLibraryStore(
             preferencesModel: preferencesModel,
-            exportReader: dependencies.cleanupPromptExportReader
+            exportReader: dependencies.cleanupPromptExportReader,
+            libraryDidChange: { [weak cleanupLibraryCloudSync, weak preferencesModel] in
+                guard let cleanupLibraryCloudSync, let preferencesModel else { return }
+                cleanupLibraryCloudSync.publish(preferencesModel.preferences)
+            }
         )
         self.promptLibrary = promptLibrary
+        cleanupLibraryCloudSync.onRemoteLibrary = { [weak preferencesModel] library in
+            guard let preferencesModel else { return }
+            var preferences = preferencesModel.preferences
+            preferences.cleanupPrompts = library.prompts
+            preferences.cleanupWorkflows = library.workflows
+            preferences.normalizeCleanupSelection()
+            if case .prompt(let id) = preferences.activeCleanupSelection,
+               let prompt = preferences.cleanupPrompts.first(where: { $0.id == id }) {
+                preferences.cleanupPrompt = prompt.instructions
+                preferences.cleanupPromptMode = .custom
+            }
+            preferencesModel.update(preferences, to: .immediate)
+        }
+        cleanupLibraryCloudSync.start(
+            with: initialPreferences,
+            publishingLocalLibraryWhenCloudIsEmpty: promptLibrary.differsFromDefault
+        )
         let connectionTestStore = ConnectionTestStore(
             coordinator: dependencies.connectionTest,
             providerStore: providerStore,

@@ -144,12 +144,16 @@ launching, testing, or releasing the complete localized app bundle.
 
 ## Development
 
-Build and launch a real development app bundle with:
+Build and launch a real development app bundle. By default, the script uses the
+`../Entrevoix.provisionprofile` Developer ID profile, which must authorize the
+`iCloud.app.entrevoix.shared` CloudKit container:
 
 ```shell
-swift build
 ./Scripts/run-app.sh
 ```
+
+Set `ENTREVOIX_PROVISIONING_PROFILE_PATH` only when using a profile from a
+different location.
 
 The script assembles `Entrevoix.app`, applies its `Info.plist`, embeds the
 required frameworks and resources, signs it locally, and launches it through
@@ -168,7 +172,6 @@ To assemble and verify the development bundle without opening it:
 
 ```shell
 ENTREVOIX_SKIP_OPEN=1 ./Scripts/run-app.sh
-./Scripts/verify-app-bundle.sh "$(swift build --show-bin-path)/Entrevoix.app"
 ```
 
 The verification checks that the app contains `Sparkle.framework`, has the
@@ -209,6 +212,12 @@ produces a signed and notarized DMG and reports its SHA-256 digest. The GitHub
 **Release** workflow can also be run manually to produce the DMG, generate and
 sign the Sparkle appcast, and publish a GitHub release using an App Store Connect
 Team API key.
+
+The release workflow requires a base64-encoded `DEVELOPER_ID_PROVISIONING_PROFILE_BASE64`
+secret. This profile must authorize the `iCloud.app.entrevoix.shared` CloudKit
+container and is embedded in the signed app bundle. Renew the profile before
+it expires: Gatekeeper validates Developer ID provisioning profiles for apps
+using advanced capabilities at every launch.
 
 See the detailed [release checklist](docs/RELEASE_CHECKLIST.md).
 

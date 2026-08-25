@@ -931,6 +931,9 @@ final class AppStoreTests: XCTestCase {
             feedback: feedback,
             listeningIndicator: listeningIndicator,
             permissions: permissions,
+            cleanupLibraryCloudSync: CleanupLibraryCloudSync(
+                store: CleanupLibraryCloudStoreSpy(remoteLibrary: nil)
+            ),
             logStore: logs,
             now: { clock.value }
         ), initialPreferences: preferences)

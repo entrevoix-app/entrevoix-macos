@@ -42,7 +42,7 @@ jobs:
 
       - name: Verify app bundle
         run: |
-          ENTREVOIX_SKIP_OPEN=1 ./Scripts/run-app.sh
+          ENTREVOIX_ALLOW_ADHOC_SIGNING=1 ENTREVOIX_SKIP_OPEN=1 ./Scripts/run-app.sh
           ./Scripts/verify-app-bundle.sh "$(swift build --show-bin-path)/Entrevoix.app"
 
       - name: Audit repository contents

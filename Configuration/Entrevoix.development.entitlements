@@ -5,8 +5,8 @@
 	<key>com.apple.application-identifier</key>
 	<string>$(TeamIdentifierPrefix)com.d9beuD.Entrevoix</string>
 	<key>com.apple.developer.icloud-container-environment</key>
-	<string>Production</string>
-	<key>com.apple.developer.icloud-container-identifiers</key>
+	<string>Development</string>
+	<key>com.apple.developer.icloud-container-development-container-identifiers</key>
 	<array>
 		<string>iCloud.app.entrevoix.shared</string>
 	</array>

@@ -123,6 +123,7 @@ enum CompositionRoot {
             permissions: permissions,
             audioInputDevices: audioInputDevices,
             updater: updater,
+            cleanupLibraryCloudSync: CleanupLibraryCloudSync(),
             logStore: logStore,
             now: Date.init
         ), initialPreferences: initialPreferences)
