@@ -404,6 +404,48 @@ final class AppStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testAutomaticInsertionRequiresAccessibilityBeforeRecording() {
+        let recorder = AppRecorderSpy()
+        let permissions = PermissionSpy()
+        let context = makeContext(
+            recorder: recorder,
+            preferences: AppPreferences(outputMode: .paste),
+            permissions: permissions
+        )
+
+        context.model.startRecording()
+
+        XCTAssertEqual(context.model.state, .idle)
+        XCTAssertEqual(recorder.startCount, 0)
+        XCTAssertEqual(permissions.accessibilityRequestCount, 1)
+        XCTAssertEqual(context.feedback.events, [.error])
+        XCTAssertTrue(context.model.logStore.entries.contains {
+            $0.message == "Automatic insertion requires Accessibility permission."
+        })
+    }
+
+    @MainActor
+    func testAutomaticInsertionRequiresAccessibilityBeforeDeliveringLastTranscript() async throws {
+        let recorder = AppRecorderSpy()
+        recorder.stopURL = try appTemporaryFile()
+        let permissions = PermissionSpy()
+        let context = makeContext(recorder: recorder, permissions: permissions)
+
+        context.model.startRecording()
+        await appWaitUntil("recording") { context.model.state == .recording }
+        context.clock.advance(by: 1)
+        context.model.stopRecording()
+        await appWaitUntil("dictation completion") { context.model.state == .idle }
+        context.model.preferences.outputMode = .paste
+
+        context.model.deliverTranscript()
+
+        XCTAssertTrue(context.delivery.pasted.isEmpty)
+        XCTAssertEqual(permissions.accessibilityRequestCount, 1)
+        XCTAssertEqual(context.feedback.events, [.recordingStarted, .recordingStopped, .error])
+    }
+
+    @MainActor
     func testDictationCancellationPlaysFeedbackOnceWhileActive() async {
         let context = makeContext()
 
@@ -670,7 +712,9 @@ final class AppStoreTests: XCTestCase {
     func testCompletedDictationCanBeCopiedAndDeliveredAgain() async throws {
         let recorder = AppRecorderSpy()
         recorder.stopURL = try appTemporaryFile()
-        let context = makeContext(recorder: recorder)
+        let permissions = PermissionSpy()
+        permissions.accessibilityPermission = .granted
+        let context = makeContext(recorder: recorder, permissions: permissions)
         context.model.preferences.outputMode = .paste
 
         context.model.startRecording()
