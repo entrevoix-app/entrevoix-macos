@@ -288,6 +288,7 @@ final class AppStore {
         let dictationSession = DictationStore(
             coordinator: dependencies.coordinator,
             providerStore: providerStore,
+            permissionsStore: permissionsModel,
             promptLibrary: promptLibrary,
             hotkeys: dependencies.hotkeys,
             textDelivery: dependencies.textDelivery,

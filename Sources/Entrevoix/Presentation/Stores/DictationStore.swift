@@ -10,6 +10,7 @@ final class DictationStore {
     @ObservationIgnored var canStart: () -> Bool = { true }
 
     private let providerStore: ProviderStore
+    private let permissionsStore: PermissionsStore
     private let promptLibrary: PromptLibraryStore
     private let hotkeys: any HotkeyHandling
     private let textDelivery: any TextDelivering
@@ -24,6 +25,7 @@ final class DictationStore {
     init(
         coordinator: DictationCoordinator,
         providerStore: ProviderStore,
+        permissionsStore: PermissionsStore,
         promptLibrary: PromptLibraryStore,
         hotkeys: any HotkeyHandling,
         textDelivery: any TextDelivering,
@@ -35,6 +37,7 @@ final class DictationStore {
     ) {
         self.coordinator = coordinator
         self.providerStore = providerStore
+        self.permissionsStore = permissionsStore
         self.promptLibrary = promptLibrary
         self.hotkeys = hotkeys
         self.textDelivery = textDelivery
@@ -112,6 +115,7 @@ final class DictationStore {
 
     func startRecording() {
         guard canStart() else { return }
+        guard automaticInsertionIsAvailable() else { return }
         if isErrorState { coordinator.dismissError() }
         guard let request = makeRequest() else {
             logStore.log("Error: no usable STT provider is selected.")
@@ -151,6 +155,7 @@ final class DictationStore {
     func deliverTranscript() {
         guard let lastTranscript else { return }
         if providerStore.preferences.outputMode == .paste {
+            guard automaticInsertionIsAvailable() else { return }
             textDelivery.copyAndPaste(lastTranscript)
         } else {
             textDelivery.copy(lastTranscript)
@@ -159,6 +164,18 @@ final class DictationStore {
 
     private var isErrorState: Bool {
         if case .error = state { return true }
+        return false
+    }
+
+    private func automaticInsertionIsAvailable() -> Bool {
+        guard providerStore.preferences.outputMode == .paste,
+              permissionsStore.accessibilityPermission != .granted
+        else {
+            return true
+        }
+        permissionsStore.requestAccessibilityPermission()
+        logStore.log("Automatic insertion requires Accessibility permission.")
+        playFeedback(.error)
         return false
     }
 

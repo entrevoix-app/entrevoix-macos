@@ -245,6 +245,23 @@ struct TextDeliveryTests {
         #expect(poster.postCount == 0)
     }
 
+    @Test("centers the indicator when Accessibility is unavailable")
+    func centersIndicatorWithoutAccessibilityPermission() {
+        let client = FakeAccessibilityClient()
+        client.trusted = false
+        let expectedCenter = NSPoint(x: 640, y: 360)
+        let provider = ListeningIndicatorPositionProvider(
+            resolver: FocusedTextElementResolver(client: client),
+            screenCenter: { expectedCenter }
+        )
+
+        let anchor = provider.anchor()
+
+        #expect(anchor.point == expectedCenter)
+        #expect(anchor.source == .accessibilityPermissionMissing)
+        #expect(anchor.placement == .centered)
+    }
+
     @Test("clipboard mode never posts a paste event")
     func clipboardModeDoesNotPaste() {
         let client = FakeAccessibilityClient()

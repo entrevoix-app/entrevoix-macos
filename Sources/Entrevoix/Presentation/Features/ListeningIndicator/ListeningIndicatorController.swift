@@ -196,16 +196,25 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
             ?? NSScreen.main?.visibleFrame
             ?? NSRect(origin: .zero, size: panelSize)
 
-        let proposedX = anchor.point.x - (panelSize.width / 2)
-        let aboveY = anchor.point.y + Self.anchorSpacing
-        let belowY = anchor.point.y - Self.anchorSpacing - panelSize.height
-        let proposedY = aboveY + panelSize.height <= visibleFrame.maxY ? aboveY : belowY
-        let maximumX = max(visibleFrame.minX, visibleFrame.maxX - panelSize.width)
-        let maximumY = max(visibleFrame.minY, visibleFrame.maxY - panelSize.height)
-        let origin = NSPoint(
-            x: min(max(proposedX, visibleFrame.minX), maximumX),
-            y: min(max(proposedY, visibleFrame.minY), maximumY)
-        )
+        let origin: NSPoint
+        switch anchor.placement {
+        case .aboveAnchor:
+            let proposedX = anchor.point.x - (panelSize.width / 2)
+            let aboveY = anchor.point.y + Self.anchorSpacing
+            let belowY = anchor.point.y - Self.anchorSpacing - panelSize.height
+            let proposedY = aboveY + panelSize.height <= visibleFrame.maxY ? aboveY : belowY
+            let maximumX = max(visibleFrame.minX, visibleFrame.maxX - panelSize.width)
+            let maximumY = max(visibleFrame.minY, visibleFrame.maxY - panelSize.height)
+            origin = NSPoint(
+                x: min(max(proposedX, visibleFrame.minX), maximumX),
+                y: min(max(proposedY, visibleFrame.minY), maximumY)
+            )
+        case .centered:
+            origin = NSPoint(
+                x: visibleFrame.midX - (panelSize.width / 2),
+                y: visibleFrame.midY - (panelSize.height / 2)
+            )
+        }
 
         panel.setFrameOrigin(origin)
         if !isPanelVisible {
@@ -288,15 +297,26 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
 struct ListeningIndicatorPositionProvider {
     private let resolver: FocusedTextElementResolver?
     private let anchorOverride: (@MainActor () -> ListeningIndicatorAnchor)?
+    private let screenCenter: @MainActor () -> NSPoint
 
-    init(resolver: FocusedTextElementResolver = .shared) {
+    init(
+        resolver: FocusedTextElementResolver = .shared,
+        screenCenter: @escaping @MainActor () -> NSPoint = {
+            let frame = NSScreen.main?.visibleFrame
+                ?? NSScreen.screens.first?.visibleFrame
+                ?? .zero
+            return NSPoint(x: frame.midX, y: frame.midY)
+        }
+    ) {
         self.resolver = resolver
         anchorOverride = nil
+        self.screenCenter = screenCenter
     }
 
     init(anchor: @escaping @MainActor () -> ListeningIndicatorAnchor) {
         resolver = nil
         anchorOverride = anchor
+        screenCenter = { .zero }
     }
 
     func anchor() -> ListeningIndicatorAnchor {
@@ -306,8 +326,9 @@ struct ListeningIndicatorPositionProvider {
         }
         guard resolver.client.isTrusted() else {
             return ListeningIndicatorAnchor(
-                point: NSEvent.mouseLocation,
-                source: .accessibilityPermissionMissing
+                point: screenCenter(),
+                source: .accessibilityPermissionMissing,
+                placement: .centered
             )
         }
 
@@ -344,6 +365,11 @@ struct ListeningIndicatorPositionProvider {
 
 
 struct ListeningIndicatorAnchor {
+    enum Placement: Equatable {
+        case aboveAnchor
+        case centered
+    }
+
     enum Source: Equatable {
         case directCaret
         case textMarkerCaret
@@ -374,11 +400,18 @@ struct ListeningIndicatorAnchor {
     let point: NSPoint
     let source: Source
     let diagnostic: String?
+    let placement: Placement
 
-    init(point: NSPoint, source: Source, diagnostic: String? = nil) {
+    init(
+        point: NSPoint,
+        source: Source,
+        diagnostic: String? = nil,
+        placement: Placement = .aboveAnchor
+    ) {
         self.point = point
         self.source = source
         self.diagnostic = diagnostic
+        self.placement = placement
     }
 }
 
