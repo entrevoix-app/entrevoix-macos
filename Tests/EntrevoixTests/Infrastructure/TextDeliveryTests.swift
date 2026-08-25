@@ -15,9 +15,11 @@ struct TextDeliveryTests {
         client.settable = true
         client.replacementSucceeds = true
         let poster = RecordingPasteEventPoster()
+        let pasteboard = FakePasteboard(text: "previous clipboard contents")
         let delivery = TextDelivery(
             resolver: FocusedTextElementResolver(client: client),
-            pasteEventPoster: poster
+            pasteEventPoster: poster,
+            pasteboard: pasteboard
         )
 
         let result = delivery.deliver(" \n native   transcript \t ", mode: .paste)
@@ -25,6 +27,8 @@ struct TextDeliveryTests {
         #expect(result == .inserted)
         #expect(client.replacedTexts == ["native   transcript "])
         #expect(poster.postCount == 0)
+        #expect(pasteboard.copiedTexts.isEmpty)
+        #expect(pasteboard.text == "previous clipboard contents")
     }
 
     @Test("falls back to paste for a Chromium contenteditable AX group")
@@ -48,6 +52,54 @@ struct TextDeliveryTests {
         #expect(client.replacedTexts.isEmpty)
         #expect(client.enabledElements.contains(client.application))
         #expect(client.enabledElements.contains(client.window))
+    }
+
+    @Test("restores the clipboard after automatic paste into a web editor")
+    func restoresClipboardAfterWebPaste() async {
+        let client = FakeAccessibilityClient()
+        let group = client.addNode(role: "AXGroup")
+        client.markAttribute("AXIsEditable", on: group)
+        client.focused = group
+        let pasteboard = FakePasteboard(text: "previous clipboard contents")
+        let poster = RecordingPasteEventPoster()
+        let delivery = TextDelivery(
+            resolver: FocusedTextElementResolver(client: client),
+            pasteEventPoster: poster,
+            pasteboard: pasteboard,
+            sleep: { _ in }
+        )
+
+        let result = delivery.deliver("browser transcript", mode: .paste)
+        await Task.yield()
+
+        #expect(result == .inserted)
+        #expect(poster.postCount == 1)
+        #expect(pasteboard.copiedTexts == ["browser transcript "])
+        #expect(pasteboard.text == "previous clipboard contents")
+    }
+
+    @Test("does not overwrite clipboard changes made after automatic insertion")
+    func doesNotRestoreOverNewClipboardContents() async {
+        let client = FakeAccessibilityClient()
+        let group = client.addNode(role: "AXGroup")
+        client.markAttribute("AXIsEditable", on: group)
+        client.focused = group
+        let pasteboard = FakePasteboard(text: "previous clipboard contents")
+        let sleep = ControlledSleep()
+        let delivery = TextDelivery(
+            resolver: FocusedTextElementResolver(client: client),
+            pasteEventPoster: RecordingPasteEventPoster(),
+            pasteboard: pasteboard,
+            sleep: sleep.sleep
+        )
+
+        _ = delivery.deliver("browser transcript", mode: .paste)
+        await sleep.waitUntilSleeping()
+        pasteboard.copy("new clipboard contents")
+        sleep.resume()
+        await Task.yield()
+
+        #expect(pasteboard.text == "new clipboard contents")
     }
 
     @Test("recognizes an Electron generic editable element")
@@ -268,6 +320,60 @@ private final class RecordingPasteEventPoster: PasteEventPosting {
     func postPaste() -> Bool {
         postCount += 1
         return result
+    }
+}
+
+@MainActor
+private final class FakePasteboard: PasteboardManaging {
+    private(set) var changeCount = 0
+    private(set) var text: String?
+    private(set) var copiedTexts: [String] = []
+
+    init(text: String? = nil) {
+        self.text = text
+    }
+
+    func copy(_ text: String) {
+        self.text = text
+        copiedTexts.append(text)
+        changeCount += 1
+    }
+
+    func snapshot() -> PasteboardSnapshot {
+        let items: [[NSPasteboard.PasteboardType: Data]]
+        if let text {
+            items = [[.string: Data(text.utf8)]]
+        } else {
+            items = []
+        }
+        return PasteboardSnapshot(items: items)
+    }
+
+    func restore(_ snapshot: PasteboardSnapshot) {
+        text = snapshot.items.first?[.string].flatMap { String(data: $0, encoding: .utf8) }
+        changeCount += 1
+    }
+}
+
+@MainActor
+private final class ControlledSleep {
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func sleep(_: Duration) async throws {
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func waitUntilSleeping() async {
+        while continuation == nil {
+            await Task.yield()
+        }
+    }
+
+    func resume() {
+        continuation?.resume()
+        continuation = nil
     }
 }
 
