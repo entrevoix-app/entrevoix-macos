@@ -134,6 +134,7 @@ struct ProviderRoutingTests {
         let transport = HTTPStub { request in response(url: request.url!, data: payload) }
         let router = ProviderCleanupRouter(
             remote: RemoteCleanupStub(),
+            anthropic: AnthropicCleanupStub(),
             codex: CodexCleanupService(
                 transport: transport,
                 credentialsProvider: TestCodexCredentialsProvider()
@@ -156,11 +157,21 @@ struct ProviderRoutingTests {
             failurePolicy: .stop,
             target: .codex
         )
+        let anthropicRequest = CleanupRequest(
+            configuration: RemoteProviderProfile.anthropic().configuration(for: .ttt)!,
+            apiKey: "key",
+            format: .anthropicMessages,
+            prompt: "anthropic policy",
+            failurePolicy: .stop,
+            target: .anthropic
+        )
 
         try await router.preflight(request: remoteRequest)
         try await router.preflight(request: codexRequest)
+        try await router.preflight(request: anthropicRequest)
         #expect(try await router.clean(text: "raw", request: remoteRequest) == "remote:raw:remote policy")
         #expect(try await router.clean(text: "raw", request: codexRequest) == "cleaned")
+        #expect(try await router.clean(text: "raw", request: anthropicRequest) == "anthropic:raw:anthropic policy")
         #expect(try await router.clean(
             text: "raw",
             configuration: .openAIResponses,
@@ -192,6 +203,18 @@ private struct RemoteCleanupStub: TextCleaning {
         prompt: String
     ) async throws -> String {
         "remote:\(text):\(prompt)"
+    }
+}
+
+private struct AnthropicCleanupStub: TextCleaning {
+    func clean(
+        text: String,
+        configuration: ProviderConfiguration,
+        apiKey: String,
+        format: CleanupAPIFormat,
+        prompt: String
+    ) async throws -> String {
+        "anthropic:\(text):\(prompt)"
     }
 }
 

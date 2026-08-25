@@ -202,6 +202,11 @@ struct ProviderCatalogView: View {
                             action: { onAddRemote(model.newRemoteProvider(kind: .openAI)) }
                         )
                         ProviderAddCard(
+                            title: text("provider.anthropic", "Anthropic"),
+                            icon: .system("sparkles"),
+                            action: { onAddRemote(model.newRemoteProvider(kind: .anthropic)) }
+                        )
+                        ProviderAddCard(
                             title: text("provider.openai_compatible", "OpenAI-compatible"),
                             icon: .system("network"),
                             action: { onAddRemote(model.newRemoteProvider(kind: .openAICompatible)) }
@@ -256,7 +261,12 @@ private struct ProviderSummaryCard: View {
         switch entry {
         case .apple: .system("apple.logo")
         case .codex: .openAI
-        case .remote(let profile): profile.kind == .openAI ? .openAI : .system("network")
+        case .remote(let profile):
+            switch profile.kind {
+            case .openAI: .openAI
+            case .anthropic: .system("sparkles")
+            case .openAICompatible: .system("network")
+            }
         }
     }
 
@@ -411,7 +421,16 @@ private struct RemoteProviderEditor: View {
 
     var body: some View {
         Form {
-            Section(draft.kind == .openAI ? text("provider.openai", "OpenAI") : text("provider.openai_compatible", "OpenAI-compatible")) {
+            if draft.kind == .anthropic {
+                Section(text("provider.anthropic", "Anthropic")) {
+                    TextField(text("field.name", "Name"), text: $draft.name)
+                    SecureField(text("field.api_key", "API key"), text: $apiKey)
+                    TextField(text("field.ttt_model", "TTT model"), text: Binding(get: { draft.ttt?.model ?? "" }, set: { draft.ttt?.model = $0 }))
+                    Label(text("provider.anthropic_ttt_only", "Anthropic is available for text cleanup only. Its endpoint and authentication are preconfigured."), systemImage: "text.badge.checkmark")
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Section(draft.kind == .openAI ? text("provider.openai", "OpenAI") : text("provider.openai_compatible", "OpenAI-compatible")) {
                 TextField(text("field.name", "Name"), text: $draft.name)
                 TextField(text("field.base_url", "Base URL"), text: $draft.baseURL).disabled(draft.kind == .openAI)
                 Picker(text("field.authentication", "Authentication"), selection: $draft.authentication) {
@@ -431,8 +450,9 @@ private struct RemoteProviderEditor: View {
                 if let message = model.modelDiscoveryError(for: draft.id) {
                     Text(message).font(.caption).foregroundStyle(.orange)
                 }
+                }
             }
-            Section(text("provider.capabilities", "Capabilities")) {
+            if draft.kind != .anthropic { Section(text("provider.capabilities", "Capabilities")) {
                 Toggle(text("provider.speech_to_text", "Speech to text"), isOn: Binding(get: { draft.stt != nil }, set: { $0 ? (draft.stt = STTCapability()) : (draft.stt = nil) }))
                 if draft.stt != nil {
                     TextField(text("field.stt_route", "STT route"), text: Binding(get: { draft.stt?.path ?? "" }, set: { draft.stt?.path = $0 })).disabled(draft.kind == .openAI)
@@ -444,7 +464,7 @@ private struct RemoteProviderEditor: View {
                     TextField(text("field.ttt_model", "TTT model"), text: Binding(get: { draft.ttt?.model ?? "" }, set: { draft.ttt?.model = $0 }))
                     Picker(text("field.ttt_api_format", "TTT API format"), selection: Binding(get: { draft.ttt?.format ?? .responses }, set: { draft.ttt?.format = $0 })) { ForEach(CleanupAPIFormat.allCases) { Text($0.title(locale: model.interfaceLocale)).tag($0) } }
                 }
-            }
+            } }
             if let first = validation.first { Label(first.localizedProviderValidationTitle(locale: model.interfaceLocale), systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
         }
         .formStyle(.grouped)

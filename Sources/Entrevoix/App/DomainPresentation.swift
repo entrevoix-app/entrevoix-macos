@@ -26,6 +26,7 @@ extension CleanupAPIFormat {
         switch self {
         case .responses: localized("cleanup.responses_api", "Responses API", locale: locale)
         case .chatCompletions: localized("cleanup.chat_completions", "Chat Completions", locale: locale)
+        case .anthropicMessages: localized("cleanup.anthropic_messages", "Anthropic Messages", locale: locale)
         }
     }
 

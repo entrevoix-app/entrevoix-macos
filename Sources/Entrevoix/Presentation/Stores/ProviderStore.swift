@@ -142,7 +142,11 @@ final class ProviderStore {
     }
 
     func newRemoteProvider(kind: RemoteProviderKind) -> RemoteProviderProfile {
-        kind == .openAI ? RemoteProviderProfile.openAI() : RemoteProviderProfile.compatible()
+        switch kind {
+        case .openAI: RemoteProviderProfile.openAI()
+        case .openAICompatible: RemoteProviderProfile.compatible()
+        case .anthropic: RemoteProviderProfile.anthropic()
+        }
     }
 
     @discardableResult
@@ -168,6 +172,8 @@ final class ProviderStore {
 
     @discardableResult
     func saveRemoteProvider(_ draft: RemoteProviderProfile, apiKey: String) -> [ProviderValidationIssue] {
+        var draft = draft
+        draft.normalizeFixedProviderFields()
         let names = preferences.providerCatalog.compactMap { entry -> String? in
             guard case .remote(let profile) = entry, profile.id != draft.id else { return nil }
             return profile.name
@@ -383,6 +389,7 @@ final class ProviderStore {
                 apiKey: preferencesStore.apiKey(for: .remote(profile.id)),
                 format: profile.ttt?.format ?? .responses,
                 failurePolicy: preferences.cleanupFailurePolicy,
+                target: profile.kind == .anthropic ? .anthropic : .remote,
                 kind: kind,
                 steps: steps
             )
