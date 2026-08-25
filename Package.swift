@@ -17,7 +17,7 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/entrevoix-app/entrevoix-shared.git",
-            exact: "0.2.0"
+            exact: "0.3.0"
         ),
         .package(
             url: "https://github.com/sindresorhus/KeyboardShortcuts.git",
