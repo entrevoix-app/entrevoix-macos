@@ -21,6 +21,7 @@ struct AppStoreDependencies {
     let permissions: any PermissionProviding
     let audioInputDevices: any AudioInputDeviceDiscovering
     let updater: any ApplicationUpdating
+    let cleanupLibraryCloudStore: any CleanupLibraryCloudStoring
     let logStore: AppLogStore
     let now: () -> Date
 
@@ -43,13 +44,14 @@ struct AppStoreDependencies {
         permissions: any PermissionProviding,
         audioInputDevices: any AudioInputDeviceDiscovering = UnavailableAudioInputDeviceCatalog(),
         updater: any ApplicationUpdating = UnavailableApplicationUpdater(),
+        cleanupLibraryCloudStore: any CleanupLibraryCloudStoring = CloudKitCleanupLibraryStore(),
         logStore: AppLogStore,
         now: @escaping () -> Date
     ) {
         self.coordinator = coordinator; self.connectionTest = connectionTest; self.textDelivery = textDelivery; self.cleanupPromptExportReader = cleanupPromptExportReader
         self.preferencesStore = preferencesStore; self.keychain = keychain; self.codexCredentials = codexCredentials; self.codexAuthenticator = codexAuthenticator; self.modelCatalog = modelCatalog; self.audioCaptureTrimmingResources = audioCaptureTrimmingResources; self.providerAlerts = providerAlerts
         self.hotkeys = hotkeys; self.launchAtLogin = launchAtLogin; self.feedback = feedback
-        self.listeningIndicator = listeningIndicator; self.permissions = permissions; self.audioInputDevices = audioInputDevices; self.updater = updater; self.logStore = logStore
+        self.listeningIndicator = listeningIndicator; self.permissions = permissions; self.audioInputDevices = audioInputDevices; self.updater = updater; self.cleanupLibraryCloudStore = cleanupLibraryCloudStore; self.logStore = logStore
         self.now = now
     }
 }

@@ -7,6 +7,7 @@ required_variables=(
     ENTREVOIX_BUILD_NUMBER
     DEVELOPER_ID_CERTIFICATE_BASE64
     DEVELOPER_ID_CERTIFICATE_PASSWORD
+    DEVELOPER_ID_PROVISIONING_PROFILE_BASE64
     BUILD_KEYCHAIN_PASSWORD
     APP_STORE_CONNECT_KEY_BASE64
     APP_STORE_CONNECT_KEY_ID
@@ -25,6 +26,7 @@ repository_directory=${script_directory:h}
 info_plist_path="$repository_directory/Configuration/Info.plist"
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/entrevoix-signing.XXXXXX")
 certificate_path="$temporary_directory/developer-id.p12"
+provisioning_profile_path="$temporary_directory/entrevoix.provisionprofile"
 keychain_path="$temporary_directory/entrevoix-signing.keychain-db"
 api_key_path="$temporary_directory/AuthKey_$APP_STORE_CONNECT_KEY_ID.p8"
 original_keychains=("${(@f)$(security list-keychains -d user | sed 's/^[[:space:]]*"\(.*\)"$/\1/')}")
@@ -48,6 +50,11 @@ cleanup() {
 trap cleanup EXIT
 
 printf '%s' "$DEVELOPER_ID_CERTIFICATE_BASE64" | /usr/bin/base64 -D > "$certificate_path"
+printf '%s' "$DEVELOPER_ID_PROVISIONING_PROFILE_BASE64" | /usr/bin/base64 -D > "$provisioning_profile_path"
+if ! /usr/bin/security cms -D -i "$provisioning_profile_path" | /usr/bin/xmllint --xpath 'count(//key[.="com.apple.developer.icloud-container-identifiers"]/following-sibling::array[1]/string[.="iCloud.app.entrevoix.shared"])' - | /usr/bin/grep -qx '1'; then
+    print -u2 "The Developer ID provisioning profile does not authorize the iCloud.app.entrevoix.shared CloudKit container."
+    exit 1
+fi
 security create-keychain -p "$BUILD_KEYCHAIN_PASSWORD" "$keychain_path"
 security set-keychain-settings -lut 21600 "$keychain_path"
 security unlock-keychain -p "$BUILD_KEYCHAIN_PASSWORD" "$keychain_path"
@@ -55,13 +62,11 @@ security import "$certificate_path" -k "$keychain_path" -P "$DEVELOPER_ID_CERTIF
 security set-key-partition-list -S apple-tool:,apple: -s -k "$BUILD_KEYCHAIN_PASSWORD" "$keychain_path"
 security list-keychain -d user -s "$keychain_path" "${original_keychains[@]}"
 
-signing_identity=$(security find-identity -v -p codesigning "$keychain_path" | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -n 1)
-if [[ -z "$signing_identity" ]]; then
-    print -u2 "The supplied certificate contains no valid Developer ID Application identity."
-    exit 1
-fi
+signing_identity=$("$script_directory/resolve-provisioning-profile-identity.sh" "$provisioning_profile_path")
 
 export ENTREVOIX_SIGNING_IDENTITY="$signing_identity"
+export ENTREVOIX_PROVISIONING_PROFILE_PATH="$provisioning_profile_path"
+export ENTREVOIX_REQUIRE_ICLOUD_PROVISIONING_PROFILE=1
 "$script_directory/build-dmg.sh"
 
 dmg_path="$repository_directory/.build/release-artifacts/Entrevoix-$ENTREVOIX_VERSION-macos.dmg"

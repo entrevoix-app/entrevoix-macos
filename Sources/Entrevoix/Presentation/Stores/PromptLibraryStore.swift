@@ -7,13 +7,16 @@ import Observation
 final class PromptLibraryStore {
     private let preferencesModel: PreferencesStore
     private let exportReader: any CleanupPromptExportReading
+    private let libraryDidChange: () -> Void
 
     init(
         preferencesModel: PreferencesStore,
-        exportReader: any CleanupPromptExportReading
+        exportReader: any CleanupPromptExportReading,
+        libraryDidChange: @escaping () -> Void = {}
     ) {
         self.preferencesModel = preferencesModel
         self.exportReader = exportReader
+        self.libraryDidChange = libraryDidChange
     }
 
     var activePrompt: CleanupPrompt? {
@@ -45,6 +48,7 @@ final class PromptLibraryStore {
                 preferences.cleanupPromptMode = .custom
             }
             preferencesModel.savePreferencesImmediately()
+            libraryDidChange()
             return .success(result)
         } catch let error {
             return .failure(error)
@@ -100,6 +104,7 @@ final class PromptLibraryStore {
             preferences.cleanupPromptMode = .custom
         }
         preferencesModel.savePreferencesImmediately()
+        libraryDidChange()
         return nil
     }
 
@@ -110,6 +115,7 @@ final class PromptLibraryStore {
         preferences.normalizeCleanupSelection()
         synchronizeLegacyPrompt()
         preferencesModel.savePreferencesImmediately()
+        libraryDidChange()
     }
 
     @discardableResult
@@ -131,6 +137,7 @@ final class PromptLibraryStore {
             preferences.activeCleanupSelection = .workflow(value.id)
         }
         preferencesModel.savePreferencesImmediately()
+        libraryDidChange()
         return nil
     }
 
@@ -140,6 +147,7 @@ final class PromptLibraryStore {
         preferences.normalizeCleanupSelection()
         synchronizeLegacyPrompt()
         preferencesModel.savePreferencesImmediately()
+        libraryDidChange()
     }
 
     func reset() {
@@ -159,6 +167,7 @@ final class PromptLibraryStore {
         preferences.cleanupPrompt = prompt.instructions
         preferences.cleanupPromptMode = .localizedDefault
         preferencesModel.savePreferencesImmediately()
+        libraryDidChange()
     }
 
     private var preferences: AppPreferences {
