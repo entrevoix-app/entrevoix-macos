@@ -249,7 +249,7 @@ final class AppStore {
         self.providerStore = providerStore
         let permissionsModel = PermissionsStore(provider: dependencies.permissions)
         self.permissionsModel = permissionsModel
-        let cleanupLibraryCloudSync = CleanupLibraryCloudSync(store: dependencies.cleanupLibraryCloudStore)
+        let cleanupLibraryCloudSync = dependencies.cleanupLibraryCloudSync
         self.cleanupLibraryCloudSync = cleanupLibraryCloudSync
         let promptLibrary = PromptLibraryStore(
             preferencesModel: preferencesModel,
@@ -274,10 +274,7 @@ final class AppStore {
             preferencesModel.update(preferences, to: .immediate)
         }
         cleanupLibraryCloudSync.start(
-            with: CleanupLibrary(
-                prompts: initialPreferences.cleanupPrompts,
-                workflows: initialPreferences.cleanupWorkflows
-            ),
+            with: initialPreferences,
             publishingLocalLibraryWhenCloudIsEmpty: promptLibrary.differsFromDefault
         )
         let connectionTestStore = ConnectionTestStore(

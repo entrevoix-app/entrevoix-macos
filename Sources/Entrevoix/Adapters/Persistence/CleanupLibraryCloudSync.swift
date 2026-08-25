@@ -46,6 +46,19 @@ final class CleanupLibraryCloudSync {
         }
     }
 
+    func start(
+        with preferences: AppPreferences,
+        publishingLocalLibraryWhenCloudIsEmpty: Bool
+    ) {
+        start(
+            with: CleanupLibrary(
+                prompts: preferences.cleanupPrompts,
+                workflows: preferences.cleanupWorkflows
+            ),
+            publishingLocalLibraryWhenCloudIsEmpty: publishingLocalLibraryWhenCloudIsEmpty
+        )
+    }
+
     func publish(_ preferences: AppPreferences) {
         let library = CleanupLibrary(
             prompts: preferences.cleanupPrompts,
