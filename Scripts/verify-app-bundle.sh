@@ -69,6 +69,7 @@ fi
 /usr/bin/codesign --verify --deep --strict "$application_path"
 /usr/bin/codesign --verify --deep --strict "$contents_path/Frameworks/Sparkle.framework"
 
+entitlements_output=$(/usr/bin/codesign -d --entitlements :- "$application_path" 2>/dev/null || true)
 if [[ "${ENTREVOIX_REQUIRE_ICLOUD_PROVISIONING_PROFILE:-0}" == "1" ]]; then
     application_team_identifier=$(
         /usr/bin/codesign -dvv "$application_path" 2>&1 \
@@ -84,7 +85,6 @@ if [[ "${ENTREVOIX_REQUIRE_ICLOUD_PROVISIONING_PROFILE:-0}" == "1" ]]; then
     fi
 fi
 
-entitlements_output=$(/usr/bin/codesign -d --entitlements :- "$application_path" 2>/dev/null || true)
 if ! print -r -- "$entitlements_output" | /usr/bin/grep -Fq '<key>com.apple.security.device.audio-input</key>'; then
     print -u2 "Entrevoix is missing the microphone audio-input entitlement."
     exit 1
@@ -93,23 +93,33 @@ fi
 if [[ "${ENTREVOIX_REQUIRE_ICLOUD_PROVISIONING_PROFILE:-0}" == "1" ]]; then
     provisioning_profile="$contents_path/embedded.provisionprofile"
     [[ -f "$provisioning_profile" ]] || {
-        print -u2 "Entrevoix is missing its embedded Developer ID provisioning profile."
+        print -u2 "Entrevoix is missing its embedded provisioning profile."
         exit 1
     }
     cloudkit_container='iCloud.app.entrevoix.shared'
+    signed_cloudkit_environment=$(print -r -- "$entitlements_output" | /usr/bin/xmllint --xpath 'string(//key[.="com.apple.developer.icloud-container-environment"]/following-sibling::string[1])' -)
+    if [[ "$signed_cloudkit_environment" == "Development" ]]; then
+        cloudkit_container_entitlement='com.apple.developer.icloud-container-development-container-identifiers'
+    else
+        cloudkit_container_entitlement='com.apple.developer.icloud-container-identifiers'
+    fi
     profile_cloudkit_container_count=$(
         /usr/bin/security cms -D -i "$provisioning_profile" \
-            | /usr/bin/xmllint --xpath "count(//key[.=\"com.apple.developer.icloud-container-identifiers\"]/following-sibling::array[1]/string[.=\"$cloudkit_container\"])" -
+            | /usr/bin/xmllint --xpath "count(//key[.=\"$cloudkit_container_entitlement\"]/following-sibling::array[1]/string[.=\"$cloudkit_container\"])" -
     )
-    signed_cloudkit_container_count=$(print -r -- "$entitlements_output" | /usr/bin/xmllint --xpath "count(//key[.=\"com.apple.developer.icloud-container-identifiers\"]/following-sibling::array[1]/string[.=\"$cloudkit_container\"])" -)
+    signed_cloudkit_container_count=$(print -r -- "$entitlements_output" | /usr/bin/xmllint --xpath "count(//key[.=\"$cloudkit_container_entitlement\"]/following-sibling::array[1]/string[.=\"$cloudkit_container\"])" -)
     signed_cloudkit_service_count=$(print -r -- "$entitlements_output" | /usr/bin/xmllint --xpath 'count(//key[.="com.apple.developer.icloud-services"]/following-sibling::array[1]/string[.="CloudKit"])' -)
+    profile_cloudkit_environment_count=$(
+        /usr/bin/security cms -D -i "$provisioning_profile" \
+            | /usr/bin/xmllint --xpath "count(//key[.='com.apple.developer.icloud-container-environment']/following-sibling::string[1][.='$signed_cloudkit_environment'] | //key[.='com.apple.developer.icloud-container-environment']/following-sibling::array[1]/string[.='$signed_cloudkit_environment'])" -
+    )
     profile_application_identifier=$(
         /usr/bin/security cms -D -i "$provisioning_profile" \
             | /usr/bin/xmllint --xpath 'string(//key[.="com.apple.application-identifier"]/following-sibling::string[1])' -
     )
     signed_application_identifier=$(print -r -- "$entitlements_output" | /usr/bin/xmllint --xpath 'string(//key[.="com.apple.application-identifier"]/following-sibling::string[1])' -)
-    if [[ "$profile_cloudkit_container_count" != "1" || "$signed_cloudkit_container_count" != "1" || "$signed_cloudkit_service_count" != "1" || "$profile_application_identifier" != "$signed_application_identifier" ]]; then
-        print -u2 "Entrevoix and its Developer ID provisioning profile must authorize the CloudKit container '$cloudkit_container'."
+    if [[ "$profile_cloudkit_container_count" != "1" || "$signed_cloudkit_container_count" != "1" || "$signed_cloudkit_service_count" != "1" || "$profile_cloudkit_environment_count" != "1" || "$profile_application_identifier" != "$signed_application_identifier" ]]; then
+        print -u2 "Entrevoix and its provisioning profile must authorize the selected CloudKit environment and container '$cloudkit_container'."
         exit 1
     fi
 fi
