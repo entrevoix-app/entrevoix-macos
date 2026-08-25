@@ -67,6 +67,22 @@ if ! /usr/bin/otool -l "$executable_path" | /usr/bin/grep -A3 'cmd LC_RPATH' | /
 fi
 
 /usr/bin/codesign --verify --deep --strict "$application_path"
+/usr/bin/codesign --verify --deep --strict "$contents_path/Frameworks/Sparkle.framework"
+
+if [[ "${ENTREVOIX_REQUIRE_ICLOUD_PROVISIONING_PROFILE:-0}" == "1" ]]; then
+    application_team_identifier=$(
+        /usr/bin/codesign -dvv "$application_path" 2>&1 \
+            | /usr/bin/sed -n 's/^TeamIdentifier=//p'
+    )
+    sparkle_team_identifier=$(
+        /usr/bin/codesign -dvv "$sparkle_binary" 2>&1 \
+            | /usr/bin/sed -n 's/^TeamIdentifier=//p'
+    )
+    if [[ -z "$application_team_identifier" || "$application_team_identifier" != "$sparkle_team_identifier" ]]; then
+        print -u2 "Entrevoix and Sparkle.framework must use the same Team ID."
+        exit 1
+    fi
+fi
 
 entitlements_output=$(/usr/bin/codesign -d --entitlements :- "$application_path" 2>/dev/null || true)
 if ! print -r -- "$entitlements_output" | /usr/bin/grep -Fq '<key>com.apple.security.device.audio-input</key>'; then

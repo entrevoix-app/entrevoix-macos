@@ -152,11 +152,15 @@ fi
 
 if [[ "$codesign_identity" == "-" ]]; then
     /usr/bin/codesign --force --deep --sign - "$contents_path/Frameworks/Sparkle.framework"
-    /usr/bin/codesign --force --deep --sign - \
+    /usr/bin/codesign --force --sign - \
         --entitlements "$signing_entitlements_path" \
         "$application_path"
 else
+    # Sign embedded code before the enclosing app. Re-signing the app deeply can
+    # leave Sparkle with a different Team ID, which dyld refuses to load.
     /usr/bin/codesign --force --deep --options runtime --timestamp --sign "$codesign_identity" \
+        "$contents_path/Frameworks/Sparkle.framework"
+    /usr/bin/codesign --force --options runtime --timestamp --sign "$codesign_identity" \
         --entitlements "$signing_entitlements_path" \
         "$application_path"
 fi
