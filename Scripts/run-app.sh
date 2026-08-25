@@ -19,6 +19,12 @@ case "$cloudkit_environment" in
         exit 64
         ;;
 esac
+if [[ ! -f "$default_provisioning_profile_path" ]]; then
+    primary_worktree=$(git -C "$repository_directory" worktree list --porcelain | awk '/^worktree / { print substr($0, 10); exit }')
+    if [[ -n "$primary_worktree" ]]; then
+        default_provisioning_profile_path="${primary_worktree:h}/$(basename "$default_provisioning_profile_path")"
+    fi
+fi
 ENTREVOIX_PROVISIONING_PROFILE_PATH=${ENTREVOIX_PROVISIONING_PROFILE_PATH:-"$default_provisioning_profile_path"}
 signing_directory=$(mktemp -d "${TMPDIR:-/tmp}/entrevoix-development-signing.XXXXXX")
 
