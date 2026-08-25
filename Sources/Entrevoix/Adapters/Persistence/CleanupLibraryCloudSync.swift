@@ -105,10 +105,15 @@ final class CloudKitCleanupLibraryStore: CleanupLibraryCloudStoring {
 
     func saveLibrary(_ library: CleanupLibrary) async throws {
         let payload = try JSONEncoder().encode(library)
-        let record = CKRecord(
-            recordType: Self.recordType,
-            recordID: CKRecord.ID(recordName: Self.recordName)
-        )
+        let recordID = CKRecord.ID(recordName: Self.recordName)
+        let record: CKRecord
+
+        do {
+            record = try await database.record(for: recordID)
+        } catch let error as CKError where error.code == .unknownItem {
+            record = CKRecord(recordType: Self.recordType, recordID: recordID)
+        }
+
         record[Self.payloadKey] = payload as CKRecordValue
         _ = try await database.save(record)
     }
