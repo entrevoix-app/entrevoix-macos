@@ -118,26 +118,48 @@ if [[ -d "$resource_bundle" ]]; then
     /usr/bin/ditto "$resource_bundle" "$contents_path/Resources/KeyboardShortcuts_KeyboardShortcuts.bundle"
 fi
 
-if [[ -z "${ENTREVOIX_PROVISIONING_PROFILE_PATH:-}" || ! -f "$ENTREVOIX_PROVISIONING_PROFILE_PATH" ]]; then
-    print -u2 "A Developer ID provisioning profile is required when signing an app with iCloud entitlements. Set ENTREVOIX_PROVISIONING_PROFILE_PATH to its path."
-    exit 1
-fi
-codesign_identity=${ENTREVOIX_CODESIGN_IDENTITY:-}
-if [[ -z "$codesign_identity" ]]; then
-    codesign_identity=$("$repository_directory/Scripts/resolve-provisioning-profile-identity.sh" "$ENTREVOIX_PROVISIONING_PROFILE_PATH")
-fi
-print "Signing development app with the Developer ID identity authorized by the provisioning profile: $codesign_identity"
-/bin/cp "$ENTREVOIX_PROVISIONING_PROFILE_PATH" "$contents_path/embedded.provisionprofile"
 signing_entitlements_path="$signing_directory/Entrevoix.entitlements"
-"$repository_directory/Scripts/resolve-signing-entitlements.sh" \
-    "$repository_directory/Configuration/Entrevoix.entitlements" \
-    "$ENTREVOIX_PROVISIONING_PROFILE_PATH" \
-    "$signing_entitlements_path"
+if [[ -f "$ENTREVOIX_PROVISIONING_PROFILE_PATH" ]]; then
+    codesign_identity=${ENTREVOIX_CODESIGN_IDENTITY:-}
+    if [[ -z "$codesign_identity" ]]; then
+        codesign_identity=$("$repository_directory/Scripts/resolve-provisioning-profile-identity.sh" "$ENTREVOIX_PROVISIONING_PROFILE_PATH")
+    fi
+    print "Signing development app with the Developer ID identity authorized by the provisioning profile: $codesign_identity"
+    /bin/cp "$ENTREVOIX_PROVISIONING_PROFILE_PATH" "$contents_path/embedded.provisionprofile"
+    "$repository_directory/Scripts/resolve-signing-entitlements.sh" \
+        "$repository_directory/Configuration/Entrevoix.entitlements" \
+        "$ENTREVOIX_PROVISIONING_PROFILE_PATH" \
+        "$signing_entitlements_path"
+    export ENTREVOIX_REQUIRE_ICLOUD_PROVISIONING_PROFILE=1
+else
+    if [[ "${ENTREVOIX_ALLOW_ADHOC_SIGNING:-0}" != "1" ]]; then
+        print -u2 "A Developer ID provisioning profile is required when signing an app with iCloud entitlements. Set ENTREVOIX_PROVISIONING_PROFILE_PATH to its path."
+        exit 1
+    fi
+    print "No Developer ID provisioning profile is available; assembling a CI-only ad hoc bundle without CloudKit entitlements."
+    /bin/cp "$repository_directory/Configuration/Entrevoix.entitlements" "$signing_entitlements_path"
+    for entitlement in \
+        com.apple.application-identifier \
+        com.apple.developer.icloud-container-environment \
+        com.apple.developer.icloud-container-identifiers \
+        com.apple.developer.icloud-services \
+        com.apple.developer.team-identifier; do
+        /usr/libexec/PlistBuddy -c "Delete :$entitlement" "$signing_entitlements_path"
+    done
+    codesign_identity=-
+    unset ENTREVOIX_REQUIRE_ICLOUD_PROVISIONING_PROFILE
+fi
 
-/usr/bin/codesign --force --deep --options runtime --timestamp --sign "$codesign_identity" \
-    --entitlements "$signing_entitlements_path" \
-    "$application_path"
-export ENTREVOIX_REQUIRE_ICLOUD_PROVISIONING_PROFILE=1
+if [[ "$codesign_identity" == "-" ]]; then
+    /usr/bin/codesign --force --deep --sign - "$contents_path/Frameworks/Sparkle.framework"
+    /usr/bin/codesign --force --deep --sign - \
+        --entitlements "$signing_entitlements_path" \
+        "$application_path"
+else
+    /usr/bin/codesign --force --deep --options runtime --timestamp --sign "$codesign_identity" \
+        --entitlements "$signing_entitlements_path" \
+        "$application_path"
+fi
 "$repository_directory/Scripts/verify-app-bundle.sh" "$application_path"
 if [[ "${ENTREVOIX_SKIP_OPEN:-0}" == "1" ]]; then
     print "Assembled Entrevoix without launching it: $application_path"

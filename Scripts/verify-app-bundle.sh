@@ -74,26 +74,28 @@ if ! print -r -- "$entitlements_output" | /usr/bin/grep -Fq '<key>com.apple.secu
     exit 1
 fi
 
-provisioning_profile="$contents_path/embedded.provisionprofile"
-[[ -f "$provisioning_profile" ]] || {
-    print -u2 "Entrevoix is missing its embedded Developer ID provisioning profile."
-    exit 1
-}
-cloudkit_container='iCloud.app.entrevoix.shared'
-profile_cloudkit_container_count=$(
-    /usr/bin/security cms -D -i "$provisioning_profile" \
-        | /usr/bin/xmllint --xpath "count(//key[.=\"com.apple.developer.icloud-container-identifiers\"]/following-sibling::array[1]/string[.=\"$cloudkit_container\"])" -
-)
-signed_cloudkit_container_count=$(print -r -- "$entitlements_output" | /usr/bin/xmllint --xpath "count(//key[.=\"com.apple.developer.icloud-container-identifiers\"]/following-sibling::array[1]/string[.=\"$cloudkit_container\"])" -)
-signed_cloudkit_service_count=$(print -r -- "$entitlements_output" | /usr/bin/xmllint --xpath 'count(//key[.="com.apple.developer.icloud-services"]/following-sibling::array[1]/string[.="CloudKit"])' -)
-profile_application_identifier=$(
-    /usr/bin/security cms -D -i "$provisioning_profile" \
-        | /usr/bin/xmllint --xpath 'string(//key[.="com.apple.application-identifier"]/following-sibling::string[1])' -
-)
-signed_application_identifier=$(print -r -- "$entitlements_output" | /usr/bin/xmllint --xpath 'string(//key[.="com.apple.application-identifier"]/following-sibling::string[1])' -)
-if [[ "$profile_cloudkit_container_count" != "1" || "$signed_cloudkit_container_count" != "1" || "$signed_cloudkit_service_count" != "1" || "$profile_application_identifier" != "$signed_application_identifier" ]]; then
-    print -u2 "Entrevoix and its Developer ID provisioning profile must authorize the CloudKit container '$cloudkit_container'."
-    exit 1
+if [[ "${ENTREVOIX_REQUIRE_ICLOUD_PROVISIONING_PROFILE:-0}" == "1" ]]; then
+    provisioning_profile="$contents_path/embedded.provisionprofile"
+    [[ -f "$provisioning_profile" ]] || {
+        print -u2 "Entrevoix is missing its embedded Developer ID provisioning profile."
+        exit 1
+    }
+    cloudkit_container='iCloud.app.entrevoix.shared'
+    profile_cloudkit_container_count=$(
+        /usr/bin/security cms -D -i "$provisioning_profile" \
+            | /usr/bin/xmllint --xpath "count(//key[.=\"com.apple.developer.icloud-container-identifiers\"]/following-sibling::array[1]/string[.=\"$cloudkit_container\"])" -
+    )
+    signed_cloudkit_container_count=$(print -r -- "$entitlements_output" | /usr/bin/xmllint --xpath "count(//key[.=\"com.apple.developer.icloud-container-identifiers\"]/following-sibling::array[1]/string[.=\"$cloudkit_container\"])" -)
+    signed_cloudkit_service_count=$(print -r -- "$entitlements_output" | /usr/bin/xmllint --xpath 'count(//key[.="com.apple.developer.icloud-services"]/following-sibling::array[1]/string[.="CloudKit"])' -)
+    profile_application_identifier=$(
+        /usr/bin/security cms -D -i "$provisioning_profile" \
+            | /usr/bin/xmllint --xpath 'string(//key[.="com.apple.application-identifier"]/following-sibling::string[1])' -
+    )
+    signed_application_identifier=$(print -r -- "$entitlements_output" | /usr/bin/xmllint --xpath 'string(//key[.="com.apple.application-identifier"]/following-sibling::string[1])' -)
+    if [[ "$profile_cloudkit_container_count" != "1" || "$signed_cloudkit_container_count" != "1" || "$signed_cloudkit_service_count" != "1" || "$profile_application_identifier" != "$signed_application_identifier" ]]; then
+        print -u2 "Entrevoix and its Developer ID provisioning profile must authorize the CloudKit container '$cloudkit_container'."
+        exit 1
+    fi
 fi
 
 if [[ -d "$raw_resource_bundle" && "$raw_resource_bundle" != "$contents_path/Resources/Entrevoix_Entrevoix.bundle" ]]; then
