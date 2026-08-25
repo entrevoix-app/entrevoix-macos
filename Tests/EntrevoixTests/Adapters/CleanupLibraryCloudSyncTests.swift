@@ -17,7 +17,7 @@ final class CleanupLibraryCloudSyncTests: XCTestCase {
             expectation.fulfill()
         }
 
-        sync.start(with: CleanupLibrary(prompts: [], workflows: []), publishingLocalLibraryWhenCloudIsEmpty: true)
+        sync.start(with: CleanupLibrary(prompts: [], workflows: []), seedLocalLibrary: true)
 
         await fulfillment(of: [expectation], timeout: 1)
         XCTAssertTrue(store.savedLibraries.isEmpty)
@@ -32,7 +32,7 @@ final class CleanupLibraryCloudSyncTests: XCTestCase {
         let store = CleanupLibraryCloudStoreSpy(remoteLibrary: nil)
         let sync = CleanupLibraryCloudSync(store: store)
 
-        sync.start(with: localLibrary, publishingLocalLibraryWhenCloudIsEmpty: true)
+        sync.start(with: localLibrary, seedLocalLibrary: true)
 
         await waitUntil { store.savedLibraries == [localLibrary] }
     }
@@ -79,7 +79,14 @@ final class CleanupLibraryCloudStoreSpy: CleanupLibraryCloudStoring {
         remoteLibrary
     }
 
-    func saveLibrary(_ library: CleanupLibrary) async throws {
+    func bootstrap(localLibrary: CleanupLibrary, seedLocalLibrary: Bool) async throws -> CleanupLibrary {
+        if remoteLibrary == nil, seedLocalLibrary { savedLibraries.append(localLibrary) }
+        return remoteLibrary ?? localLibrary
+    }
+
+    func saveLibrary(_ library: CleanupLibrary, replacing _: CleanupLibrary?) async throws {
         savedLibraries.append(library)
     }
+
+    func ensureSubscription(id _: String) async throws {}
 }

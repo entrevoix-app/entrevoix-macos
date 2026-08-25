@@ -90,6 +90,11 @@ if ! print -r -- "$entitlements_output" | /usr/bin/grep -Fq '<key>com.apple.secu
     exit 1
 fi
 
+if [[ "${ENTREVOIX_REQUIRE_ICLOUD_PROVISIONING_PROFILE:-0}" == "1" ]] && ! print -r -- "$entitlements_output" | /usr/bin/grep -Fq '<key>aps-environment</key>'; then
+    print -u2 "Entrevoix is missing the APNs entitlement required for CloudKit subscriptions."
+    exit 1
+fi
+
 if [[ "${ENTREVOIX_REQUIRE_ICLOUD_PROVISIONING_PROFILE:-0}" == "1" ]]; then
     provisioning_profile="$contents_path/embedded.provisionprofile"
     [[ -f "$provisioning_profile" ]] || {
