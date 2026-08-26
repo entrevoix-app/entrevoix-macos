@@ -82,7 +82,7 @@ struct SettingsLibraryRow: View {
             } icon: {
                 Image(systemName: systemImage)
                     .foregroundStyle(.tint)
-                    .frame(width: 16)
+                    .frame(width: SettingsLibraryRowLayout.iconWidth)
             }
             .labelStyle(SettingsLibraryRowLabelStyle())
 
@@ -98,7 +98,9 @@ struct SettingsLibraryRow: View {
         .padding(.vertical, 3)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-        .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+        .alignmentGuide(.listRowSeparatorLeading) { dimensions in
+            dimensions[.leading] + SettingsLibraryRowLayout.separatorLeadingInset
+        }
     }
 
     @ViewBuilder
@@ -120,9 +122,15 @@ struct SettingsLibraryRow: View {
 
 private struct SettingsLibraryRowLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: SettingsLibraryRowLayout.iconSpacing) {
             configuration.icon
             configuration.title
         }
     }
+}
+
+private enum SettingsLibraryRowLayout {
+    static let iconWidth: CGFloat = 16
+    static let iconSpacing: CGFloat = 12
+    static let separatorLeadingInset = iconWidth + iconSpacing
 }
