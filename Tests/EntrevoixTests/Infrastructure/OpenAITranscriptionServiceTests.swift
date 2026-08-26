@@ -1,3 +1,4 @@
+import AVFAudio
 import Foundation
 import XCTest
 import EntrevoixCore
@@ -250,6 +251,89 @@ final class OpenAITranscriptionServiceTests: XCTestCase {
         }
     }
 
+    func testSelectedUploadFormatsEncodeAudioAndUseMatchingMultipartMetadata() async throws {
+        let audioURL = try encodedAudioFixture()
+        defer { try? FileManager.default.removeItem(at: audioURL) }
+
+        for (format, filename, mimeType) in [
+            (AudioUploadFormat.m4aAAC, "audio.m4a", "audio/mp4"),
+            (.flac, "audio.flac", "audio/flac")
+        ] {
+            let transport = HTTPStub { request in
+                response(url: request.url!, data: Data(#"{"text":"transcribed"}"#.utf8))
+            }
+            let service = OpenAITranscriptionService(transport: transport, makeBoundary: { "Audio-Test" })
+            let configuration = ProviderConfiguration(
+                name: "STT",
+                baseURL: "https://stt.example.com/v1",
+                path: "audio/transcriptions",
+                model: "whisper-1",
+                authentication: .none,
+                audioUploadFormat: format
+            )
+
+            let transcript = try await service.transcribe(
+                audioURL: audioURL,
+                configuration: configuration,
+                apiKey: "",
+                prompt: nil,
+                language: nil
+            )
+            XCTAssertEqual(transcript, "transcribed")
+
+            let requests = await transport.requests
+            let request = try XCTUnwrap(requests.first)
+            let body = try XCTUnwrap(request.httpBody)
+            XCTAssertTrue(String(decoding: body, as: UTF8.self).contains("filename=\"\(filename)\"\r\nContent-Type: \(mimeType)"))
+            let encodedAudio = try encodedAudioData(from: body, mimeType: mimeType)
+            XCTAssertGreaterThan(encodedAudio.count, 32)
+
+            switch format {
+            case .m4aAAC:
+                XCTAssertEqual(encodedAudio.dropFirst(4).prefix(4), Data("ftyp".utf8))
+                let inspectedURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("entrevoix-inspected-upload-\(UUID().uuidString).m4a")
+                defer { try? FileManager.default.removeItem(at: inspectedURL) }
+                try encodedAudio.write(to: inspectedURL)
+                let inspected = try AVAudioFile(forReading: inspectedURL)
+                XCTAssertGreaterThan(inspected.length, 0)
+                XCTAssertEqual(inspected.fileFormat.channelCount, 1)
+                XCTAssertEqual(inspected.fileFormat.sampleRate, 16_000, accuracy: 0.01)
+            case .flac:
+                XCTAssertEqual(encodedAudio.prefix(4), Data("fLaC".utf8))
+            case .wav:
+                XCTFail("Expected a compressed upload format")
+            }
+        }
+    }
+
+    func testEncodingFailureDoesNotUploadAudio() async throws {
+        let audioURL = try appTemporaryFile(contents: Data([0x00, 0x01, 0x02]))
+        defer { try? FileManager.default.removeItem(at: audioURL) }
+        let transport = HTTPStub { request in response(url: request.url!) }
+        let service = OpenAITranscriptionService(transport: transport)
+        let configuration = ProviderConfiguration(
+            name: "STT",
+            baseURL: "https://stt.example.com/v1",
+            path: "audio/transcriptions",
+            model: "whisper-1",
+            authentication: .none,
+            audioUploadFormat: .m4aAAC
+        )
+
+        await assertTranscriptionError(.audioEncodingFailed) {
+            try await service.transcribe(
+                audioURL: audioURL,
+                configuration: configuration,
+                apiKey: "",
+                prompt: nil,
+                language: nil
+            )
+        }
+        let requests = await transport.requests
+        XCTAssertTrue(requests.isEmpty)
+    }
+
     private func transcribe(audioURL: URL, transport: any HTTPTransporting) async throws -> String {
         try await OpenAITranscriptionService(transport: transport).transcribe(
             audioURL: audioURL,
@@ -272,5 +356,34 @@ final class OpenAITranscriptionServiceTests: XCTestCase {
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
+    }
+
+    private func encodedAudioFixture() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("entrevoix-upload-source-\(UUID().uuidString).wav")
+        let format = try XCTUnwrap(AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 16_000,
+            channels: 1,
+            interleaved: false
+        ))
+        let file = try AVAudioFile(forWriting: url, settings: format.settings)
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 1_600))
+        buffer.frameLength = 1_600
+        let samples = try XCTUnwrap(buffer.floatChannelData?.pointee)
+        for index in 0..<Int(buffer.frameLength) {
+            samples[index] = index.isMultiple(of: 2) ? 0.1 : -0.1
+        }
+        try file.write(from: buffer)
+        file.close()
+        return url
+    }
+
+    private func encodedAudioData(from body: Data, mimeType: String) throws -> Data {
+        let separator = Data("Content-Type: \(mimeType)\r\n\r\n".utf8)
+        let terminator = Data("\r\n--Audio-Test--\r\n".utf8)
+        let start = try XCTUnwrap(body.range(of: separator)?.upperBound)
+        let end = try XCTUnwrap(body.range(of: terminator, options: [], in: start..<body.endIndex)?.lowerBound)
+        return body.subdata(in: start..<end)
     }
 }
