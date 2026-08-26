@@ -293,6 +293,7 @@ private struct ProviderAddCard: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
             .background(
                 isHovering ? Color.accentColor.opacity(0.05) : .clear,
                 in: RoundedRectangle(cornerRadius: 12, style: .continuous)
