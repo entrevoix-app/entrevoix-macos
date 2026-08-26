@@ -78,6 +78,7 @@ final class LocalizationTests: XCTestCase {
             "audio_input.unavailable",
             "audio_input.unavailable_warning",
             "field.stt_language",
+            "field.stt_upload_format",
             "field.primary_shortcut",
             "field.secondary_shortcut",
             "field.stt_favorite_languages",
@@ -157,7 +158,15 @@ final class LocalizationTests: XCTestCase {
             "codex.ttt_only",
             "prompts.actions",
             "prompts.back_to_library",
-            "error.codex_not_connected"
+            "error.codex_not_connected",
+            "stt_upload_format.wav",
+            "stt_upload_format.wav.description",
+            "stt_upload_format.m4a_aac",
+            "stt_upload_format.m4a_aac.description",
+            "stt_upload_format.flac",
+            "stt_upload_format.flac.description",
+            "stt_upload_format.compatibility_hint",
+            "error.stt_audio_encoding_failed"
         ] {
             let entry = try XCTUnwrap(strings[key] as? [String: Any])
             let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any])

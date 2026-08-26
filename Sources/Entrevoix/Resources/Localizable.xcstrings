@@ -155,6 +155,12 @@
         "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "La transcription est vide." } }
       }
     },
+    "error.stt_audio_encoding_failed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The audio file could not be prepared for upload." } },
+        "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Le fichier audio n’a pas pu être préparé pour l’envoi." } }
+      }
+    },
     "error.stt_file_too_large" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "The audio file exceeds the 25 MB limit." } },
@@ -538,6 +544,14 @@
     "field.provider" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Provider" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Fournisseur" } } } },
     "field.stt_model" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "STT model" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Modèle STT" } } } },
     "field.stt_route" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "STT route" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Route STT" } } } },
+    "field.stt_upload_format" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Audio upload format" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Format d’envoi audio" } } } },
+    "stt_upload_format.compatibility_hint" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Format support varies by endpoint. When in doubt, choose WAV." } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "La prise en charge varie selon l’endpoint. En cas de doute, choisissez WAV." } } } },
+    "stt_upload_format.wav" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "WAV (lossless)" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "WAV (sans perte)" } } } },
+    "stt_upload_format.wav.description" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Best compatibility and lossless audio, with the largest files." } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Qualité sans perte et compatibilité maximale, avec les fichiers les plus volumineux." } } } },
+    "stt_upload_format.m4a_aac" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "M4A (AAC, 32 kb/s)" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "M4A (AAC, 32 kb/s)" } } } },
+    "stt_upload_format.m4a_aac.description" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Smallest files and faster uploads, with lossy compression and provider-dependent support." } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Fichiers les plus petits et envois plus rapides, avec compression avec perte et compatibilité dépendante du fournisseur." } } } },
+    "stt_upload_format.flac" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "FLAC (lossless)" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "FLAC (sans perte)" } } } },
+    "stt_upload_format.flac.description" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Lossless audio, more compact than WAV but usually larger than AAC; provider support varies." } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Qualité sans perte, plus compacte que WAV mais généralement plus lourde qu’AAC ; compatibilité variable." } } } },
     "field.ttt_api_format" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "TTT API format" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Format d’API TTT" } } } },
     "field.ttt_model" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "TTT model" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Modèle TTT" } } } },
     "field.ttt_route" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "TTT route" } }, "fr-FR" : { "stringUnit" : { "state" : "translated", "value" : "Route TTT" } } } },

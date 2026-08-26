@@ -482,6 +482,27 @@ private struct RemoteProviderEditor: View {
                 if draft.stt != nil {
                     TextField(text("field.stt_route", "STT route"), text: Binding(get: { draft.stt?.path ?? "" }, set: { draft.stt?.path = $0 })).disabled(draft.kind == .openAI)
                     TextField(text("field.stt_model", "STT model"), text: Binding(get: { draft.stt?.model ?? "" }, set: { draft.stt?.model = $0 }))
+                    Picker(
+                        text("field.stt_upload_format", "Audio upload format"),
+                        selection: Binding(
+                            get: { draft.stt?.uploadFormat ?? .wav },
+                            set: { draft.stt?.uploadFormat = $0 }
+                        )
+                    ) {
+                        ForEach(AudioUploadFormat.allCases) { format in
+                            VStack(alignment: .leading) {
+                                Text(format.title(locale: model.interfaceLocale))
+                                Text(format.description(locale: model.interfaceLocale))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .tag(format)
+                        }
+                    }
+                    .pickerStyle(.radioGroup)
+                    Text(text("stt_upload_format.compatibility_hint", "Format support varies by endpoint. When in doubt, choose WAV."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 Toggle(text("provider.text_cleanup", "Text cleanup"), isOn: Binding(get: { draft.ttt != nil }, set: { $0 ? (draft.ttt = TTTCapability()) : (draft.ttt = nil) }))
                 if draft.ttt != nil {
@@ -512,6 +533,30 @@ private extension ProviderValidationIssue {
         case .missingModel: EntrevoixLocalization.text("provider.validation_model", defaultValue: "A model is required.", locale: locale)
         case .missingHeaderName: EntrevoixLocalization.text("provider.validation_header", defaultValue: "An authentication header name is required.", locale: locale)
         case .missingAPIKey: EntrevoixLocalization.text("provider.validation_api_key", defaultValue: "An API key is required for this authentication mode.", locale: locale)
+        }
+    }
+}
+
+private extension AudioUploadFormat {
+    func title(locale: Locale) -> String {
+        switch self {
+        case .wav:
+            EntrevoixLocalization.text("stt_upload_format.wav", defaultValue: "WAV (lossless)", locale: locale)
+        case .m4aAAC:
+            EntrevoixLocalization.text("stt_upload_format.m4a_aac", defaultValue: "M4A (AAC, 32 kb/s)", locale: locale)
+        case .flac:
+            EntrevoixLocalization.text("stt_upload_format.flac", defaultValue: "FLAC (lossless)", locale: locale)
+        }
+    }
+
+    func description(locale: Locale) -> String {
+        switch self {
+        case .wav:
+            EntrevoixLocalization.text("stt_upload_format.wav.description", defaultValue: "Best compatibility and lossless audio, with the largest files.", locale: locale)
+        case .m4aAAC:
+            EntrevoixLocalization.text("stt_upload_format.m4a_aac.description", defaultValue: "Smallest files and faster uploads, with lossy compression and provider-dependent support.", locale: locale)
+        case .flac:
+            EntrevoixLocalization.text("stt_upload_format.flac.description", defaultValue: "Lossless audio, more compact than WAV but usually larger than AAC; provider support varies.", locale: locale)
         }
     }
 }

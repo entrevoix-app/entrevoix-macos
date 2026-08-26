@@ -103,6 +103,8 @@ extension UserFacingErrorMessage {
             localized("error.stt_missing_api_key", "The STT API key is missing.", locale: locale)
         case .sttFileTooLarge:
             localized("error.stt_file_too_large", "The audio file exceeds the 25 MB limit.", locale: locale)
+        case .sttAudioEncodingFailed:
+            localized("error.stt_audio_encoding_failed", "The audio file could not be prepared for upload.", locale: locale)
         case .sttInvalidResponse:
             localized("error.stt_invalid_response", "The STT response is invalid.", locale: locale)
         case .sttEmptyResult:
