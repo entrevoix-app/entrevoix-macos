@@ -247,7 +247,6 @@ private struct ProviderSummaryCard: View {
                 .buttonStyle(.borderedProminent)
         }
         .padding(12)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func capabilities(for entry: ProviderCatalogEntry) -> String {
@@ -295,7 +294,7 @@ private struct ProviderAddCard: View {
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                isHovering ? Color.accentColor.opacity(0.05) : Color(nsColor: .controlBackgroundColor),
+                isHovering ? Color.accentColor.opacity(0.05) : .clear,
                 in: RoundedRectangle(cornerRadius: 12, style: .continuous)
             )
         }
