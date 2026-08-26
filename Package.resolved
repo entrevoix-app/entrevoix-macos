@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/entrevoix-app/entrevoix-shared.git",
       "state" : {
-        "revision" : "b25cdf289d85e205d1a0b78f8159bb85c8fec5a9",
-        "version" : "0.2.0"
+        "revision" : "818935cc2f0b5998d84a809ca31d95e04ac90840",
+        "version" : "0.3.0"
       }
     },
     {

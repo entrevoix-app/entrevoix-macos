@@ -210,7 +210,7 @@ final class AudioRecorderTests: XCTestCase {
         XCTAssertGreaterThan(maximum, 0.01)
     }
 
-    func testSpeechTrimBoundsKeepOneHundredMillisecondsOfPaddingAndRewriteWAV() throws {
+    func testSpeechTrimBoundsKeepTwoHundredMillisecondsOfPaddingAndRewriteWAV() throws {
         let format = try XCTUnwrap(AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
             sampleRate: 16_000,
@@ -230,8 +230,8 @@ final class AudioRecorderTests: XCTestCase {
         let speech = CMTimeRange(start: CMTime(seconds: 0.5, preferredTimescale: 16_000), duration: CMTime(seconds: 0.7, preferredTimescale: 16_000))
         let bounds = try XCTUnwrap(AppleSpeechAudioCaptureTrimmer.trimBounds(for: [speech], file: input))
 
-        XCTAssertEqual(bounds.startFrame, 6_400)
-        XCTAssertEqual(bounds.endFrame, 20_800)
+        XCTAssertEqual(bounds.startFrame, 4_800)
+        XCTAssertEqual(bounds.endFrame, 22_400)
         let trimmedURL = try AppleSpeechAudioCaptureTrimmer.writeProcessedFile(
             from: input,
             sourceURL: sourceURL,
@@ -244,7 +244,7 @@ final class AudioRecorderTests: XCTestCase {
         let trimmed = try AVAudioFile(forReading: trimmedURL)
         XCTAssertEqual(trimmed.fileFormat.sampleRate, 16_000)
         XCTAssertEqual(trimmed.fileFormat.channelCount, 1)
-        XCTAssertEqual(trimmed.length, 14_400)
+        XCTAssertEqual(trimmed.length, 17_600)
         XCTAssertFalse(FileManager.default.fileExists(atPath: sourceURL.path))
     }
 
@@ -276,7 +276,7 @@ final class AudioRecorderTests: XCTestCase {
             reduceInternalPauses: true
         ))
 
-        XCTAssertEqual(plan.sourceRanges, [14_400..<32_000, 64_000..<81_600])
+        XCTAssertEqual(plan.sourceRanges, [12_800..<32_000, 64_000..<83_200])
         XCTAssertEqual(plan.insertedSilentFrames, 8_000)
         let processedURL = try AppleSpeechAudioCaptureTrimmer.writeProcessedFile(
             from: input,
@@ -284,7 +284,7 @@ final class AudioRecorderTests: XCTestCase {
             plan: plan
         )
         defer { try? FileManager.default.removeItem(at: processedURL) }
-        XCTAssertEqual(try AVAudioFile(forReading: processedURL).length, 43_200)
+        XCTAssertEqual(try AVAudioFile(forReading: processedURL).length, 46_400)
     }
 
 }

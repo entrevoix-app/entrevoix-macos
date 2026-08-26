@@ -1,9 +1,11 @@
 import AppKit
+import Combine
 import SwiftUI
 import EntrevoixCore
 
 @main
 struct EntrevoixApp: App {
+    @NSApplicationDelegateAdaptor(EntrevoixAppDelegate.self) private var appDelegate
     @State private var launchState: CompositionRoot.LaunchState
     @State private var dockPresenceController: DockPresenceController
     @State private var didOpenOnboarding = false
@@ -46,6 +48,9 @@ struct EntrevoixApp: App {
                         guard recoveredPreferences, !didOpenRecoveryNotice else { return }
                         didOpenRecoveryNotice = true
                         openUserFacingWindow(id: "startup-recovery")
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: .cleanupLibraryCloudChange)) { _ in
+                        model.refreshCleanupLibrary()
                     }
             } else {
                 Text(EntrevoixLocalization.text("startup.incompatible.title", defaultValue: "Entrevoix Update Required", locale: Locale(identifier: "en")))

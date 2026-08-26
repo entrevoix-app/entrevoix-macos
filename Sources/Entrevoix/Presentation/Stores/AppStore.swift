@@ -274,8 +274,11 @@ final class AppStore {
             preferencesModel.update(preferences, to: .immediate)
         }
         cleanupLibraryCloudSync.start(
-            with: initialPreferences,
-            publishingLocalLibraryWhenCloudIsEmpty: promptLibrary.differsFromDefault
+            with: CleanupLibrary(
+                prompts: initialPreferences.cleanupPrompts,
+                workflows: initialPreferences.cleanupWorkflows
+            ),
+            seedLocalLibrary: promptLibrary.differsFromDefault
         )
         let connectionTestStore = ConnectionTestStore(
             coordinator: dependencies.connectionTest,
@@ -398,6 +401,10 @@ final class AppStore {
     }
 
     func resetCleanupPrompt() { resetPromptLibrary() }
+
+    func refreshCleanupLibrary() {
+        cleanupLibraryCloudSync.refresh()
+    }
 
     var state: DictationState { dictationSession.state }
 
