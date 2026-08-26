@@ -161,7 +161,7 @@ else
     /bin/cp "$source_entitlements_path" "$signing_entitlements_path"
     for entitlement in \
         com.apple.application-identifier \
-        aps-environment \
+        com.apple.developer.aps-environment \
         com.apple.developer.icloud-container-environment \
         com.apple.developer.icloud-container-development-container-identifiers \
         com.apple.developer.icloud-container-identifiers \
