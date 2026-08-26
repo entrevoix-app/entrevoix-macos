@@ -144,10 +144,10 @@ private struct WorkflowListPage: View {
             }
         }
         .listStyle(.inset)
-        .settingsPageContentMargins()
+        .settingsInsetListContentMargins()
         .scrollBounceBehavior(.always)
         .scrollEdgeEffectStyle(.soft, for: .top)
-        .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
+        .contentMargins(.bottom, SettingsLayout.contentBottomInset, for: .scrollContent)
         .searchable(
             text: $searchText,
             placement: .toolbar,
@@ -339,7 +339,7 @@ private struct WorkflowEditor: View {
             }
         }
         .listStyle(.inset)
-        .settingsPageContentMargins()
+        .settingsInsetListContentMargins()
         .scrollEdgeEffectStyle(.soft, for: .top)
         .sheet(isPresented: $isPromptPickerPresented) {
             WorkflowPromptPickerSheet(
@@ -395,8 +395,8 @@ private struct WorkflowPromptPickerSheet: View {
             }
         }
         .listStyle(.inset)
-        .settingsPageContentMargins()
-        .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
+        .settingsInsetListContentMargins()
+        .contentMargins(.bottom, SettingsLayout.contentBottomInset, for: .scrollContent)
         .navigationTitle(
             EntrevoixLocalization.text(
                 "workflows.add_prompt",

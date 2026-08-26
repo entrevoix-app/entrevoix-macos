@@ -6,7 +6,7 @@ struct SettingsLibraryHeader: View {
     let systemImage: String
 
     var body: some View {
-        VStack(spacing: SettingsLayout.pageInset) {
+        VStack(spacing: SettingsLayout.contentBottomInset) {
             Image(systemName: systemImage)
                 .font(.title2.weight(.medium))
                 .symbolRenderingMode(.hierarchical)

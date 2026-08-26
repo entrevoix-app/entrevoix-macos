@@ -82,7 +82,7 @@ struct ProvidersSettingsView: View {
                 }
             }
             .formStyle(.grouped)
-            .settingsGroupedFormContentMargins()
+            .settingsFormContentMargins()
         } else if selection == .codex, let profile = model.preferences.provider(for: .codex)?.codexProfile {
             CodexProviderEditor(model: model, profile: profile)
         } else if let draft {
@@ -216,7 +216,7 @@ struct ProviderCatalogView: View {
             }
         }
         .settingsPageContentMargins()
-        .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
+        .contentMargins(.bottom, SettingsLayout.contentBottomInset, for: .scrollContent)
     }
 
     private func text(_ key: String, _ fallback: String) -> String {
@@ -414,7 +414,7 @@ private struct CodexProviderEditor: View {
             }
         }
         .formStyle(.grouped)
-        .settingsGroupedFormContentMargins()
+        .settingsFormContentMargins()
     }
 
     private func text(_ key: String, _ fallback: String) -> String {
@@ -521,7 +521,7 @@ private struct RemoteProviderEditor: View {
             if let first = validation.first { Label(first.localizedProviderValidationTitle(locale: model.interfaceLocale), systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
         }
         .formStyle(.grouped)
-        .settingsGroupedFormContentMargins()
+        .settingsFormContentMargins()
     }
 
     private func text(_ key: String, _ fallback: String) -> String {

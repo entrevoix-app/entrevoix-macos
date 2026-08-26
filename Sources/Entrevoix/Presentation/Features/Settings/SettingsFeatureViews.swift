@@ -148,7 +148,7 @@ struct GeneralSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .settingsGroupedFormContentMargins()
+        .settingsFormContentMargins()
         .task(id: model.preferences.sttLanguage) {
             model.refreshAudioCaptureTrimmingResourceState()
         }
@@ -347,7 +347,7 @@ struct STTSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .settingsGroupedFormContentMargins()
+        .settingsFormContentMargins()
     }
 }
 
@@ -392,6 +392,7 @@ struct DictationDictionaryView: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
+            .padding(.horizontal, SettingsLayout.cardContentInset)
             .padding(.bottom, SettingsLayout.sectionSpacing)
             .listRowInsets(EdgeInsets())
             .listRowBackground(Color.clear)
@@ -411,6 +412,7 @@ struct DictationDictionaryView: View {
                         : EntrevoixLocalization.text("library.no_results", defaultValue: "No matching items", locale: locale),
                     systemImage: "textformat.abc"
                 )
+                .listRowInsets(EdgeInsets())
             } else {
                 ForEach(filteredTerms, id: \.self) { term in
                     if editingTerm == term {
@@ -454,16 +456,18 @@ struct DictationDictionaryView: View {
                             .fixedSize()
                             .accessibilityLabel(EntrevoixLocalization.text("dictation_dictionary.actions", defaultValue: "Term actions", locale: locale))
                         }
+                        .padding(.horizontal, SettingsLayout.cardContentInset)
+                        .listRowInsets(EdgeInsets())
                         .listRowSeparator(term == filteredTerms.last ? .hidden : .visible, edges: .bottom)
                     }
                 }
             }
         }
         .listStyle(.inset)
-        .settingsPageContentMargins()
+        .settingsInsetListContentMargins()
         .scrollBounceBehavior(.always)
         .scrollEdgeEffectStyle(.soft, for: .top)
-        .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
+        .contentMargins(.bottom, SettingsLayout.contentBottomInset, for: .scrollContent)
         .searchable(
             text: $searchText,
             placement: .toolbar,
@@ -534,7 +538,9 @@ struct DictationDictionaryView: View {
             }
         }
         .padding(.vertical, 8)
+        .padding(.horizontal, SettingsLayout.cardContentInset)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .listRowInsets(EdgeInsets())
         .listRowBackground(Color(nsColor: .controlBackgroundColor))
         .listRowSeparator(.hidden, edges: .bottom)
         .overlay(alignment: .bottom) {
@@ -638,7 +644,7 @@ struct CleanupSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .settingsGroupedFormContentMargins()
+        .settingsFormContentMargins()
     }
 }
 
@@ -850,10 +856,10 @@ private struct PromptListPage: View {
             .listSectionSeparator(.hidden)
         }
         .listStyle(.inset)
-        .settingsPageContentMargins()
+        .settingsInsetListContentMargins()
         .scrollBounceBehavior(.always)
         .scrollEdgeEffectStyle(.soft, for: .top)
-        .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
+        .contentMargins(.bottom, SettingsLayout.contentBottomInset, for: .scrollContent)
         .navigationBarBackButtonHidden(true)
         .searchable(
             text: $searchText,
@@ -1130,6 +1136,7 @@ private struct PromptEditor: View {
             }
         }
         .formStyle(.grouped)
+        .settingsFormContentMargins()
     }
 }
 
