@@ -167,6 +167,7 @@ struct ProviderCatalogView: View {
                                 ProviderSummaryCard(entry: entry, onConfigure: { onConfigure(entry) })
                                 if index < providers.index(before: providers.endIndex) {
                                     Divider()
+                                        .padding(.leading, ProviderSummaryCard.textLeadingInset)
                                 }
                             }
                         }
@@ -225,12 +226,16 @@ struct ProviderCatalogView: View {
 }
 
 private struct ProviderSummaryCard: View {
+    static let contentInset: CGFloat = 12
+    static let iconSpacing: CGFloat = 12
+    static let textLeadingInset = contentInset + ProviderIcon.size + iconSpacing
+
     @Environment(ProviderStore.self) private var model
     let entry: ProviderCatalogEntry
     let onConfigure: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Self.iconSpacing) {
             ProviderIcon(icon: icon(for: entry))
 
             VStack(alignment: .leading, spacing: 2) {
@@ -246,7 +251,7 @@ private struct ProviderSummaryCard: View {
             Button(text("action.configure", "Configure"), action: onConfigure)
                 .buttonStyle(.borderedProminent)
         }
-        .padding(12)
+        .padding(Self.contentInset)
     }
 
     private func capabilities(for entry: ProviderCatalogEntry) -> String {
@@ -306,6 +311,8 @@ private struct ProviderAddCard: View {
 }
 
 private struct ProviderIcon: View {
+    static let size: CGFloat = 28
+
     enum Kind {
         case openAI
         case anthropic
@@ -324,7 +331,7 @@ private struct ProviderIcon: View {
                         .renderingMode(.template)
                         .foregroundStyle(.primary)
                         .scaledToFit()
-                        .frame(width: 28, height: 28)
+                        .frame(width: Self.size, height: Self.size)
                 } else {
                     Image(systemName: "circle.grid.2x2")
                         .symbolRenderingMode(.hierarchical)
@@ -349,7 +356,7 @@ private struct ProviderIcon: View {
                     .foregroundStyle(Color.accentColor)
             }
         }
-            .frame(width: 28, height: 28)
+            .frame(width: Self.size, height: Self.size)
             .background(backgroundColor, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
             .overlay {
                 if case .openAI = icon {
