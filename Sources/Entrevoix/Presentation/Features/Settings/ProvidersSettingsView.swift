@@ -312,7 +312,6 @@ private struct ProviderIcon: View {
         case system(String)
     }
 
-    @Environment(\.colorScheme) private var colorScheme
     let icon: Kind
 
     var body: some View {
@@ -322,8 +321,10 @@ private struct ProviderIcon: View {
                 if let image = openAIImage {
                     Image(nsImage: image)
                         .resizable()
+                        .renderingMode(.template)
+                        .foregroundStyle(.primary)
                         .scaledToFit()
-                        .frame(width: 30, height: 30)
+                        .frame(width: 28, height: 28)
                 } else {
                     Image(systemName: "circle.grid.2x2")
                         .symbolRenderingMode(.hierarchical)
@@ -363,9 +364,12 @@ private struct ProviderIcon: View {
     }
 
     private var openAIImage: NSImage? {
-        let resource = colorScheme == .dark ? "openai-blossom-white" : "openai-blossom-black"
-        guard let url = EntrevoixLocalization.resourceURL(forResource: resource, withExtension: "webp") else { return nil }
-        return NSImage(contentsOf: url)
+        guard let url = EntrevoixLocalization.resourceURL(forResource: "openai-blossom", withExtension: "svg"),
+              let image = NSImage(contentsOf: url) else {
+            return nil
+        }
+        image.isTemplate = true
+        return image
     }
 
     private var anthropicImage: NSImage? {
