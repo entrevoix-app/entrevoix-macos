@@ -361,9 +361,12 @@ struct DictationDictionaryView: View {
     @FocusState private var newTermIsFocused: Bool
 
     private var filteredTerms: [String] {
+        let terms = model.preferences.dictationDictionary.sorted {
+            $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
+        }
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return model.preferences.dictationDictionary }
-        return model.preferences.dictationDictionary.filter {
+        guard !query.isEmpty else { return terms }
+        return terms.filter {
             $0.localizedCaseInsensitiveContains(query)
         }
     }
