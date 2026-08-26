@@ -148,7 +148,7 @@ struct GeneralSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .settingsGroupedFormContentMargins()
+        .settingsFormContentMargins()
         .task(id: model.preferences.sttLanguage) {
             model.refreshAudioCaptureTrimmingResourceState()
         }
@@ -322,8 +322,6 @@ struct STTSettingsView: View {
                 } else if model.preferences.selectedSTTProviderID == .apple {
                     Label(EntrevoixLocalization.text("provider.apple_speech_hint", defaultValue: "Apple Speech runs locally. A supported speech asset must be downloaded and ready before recording.", locale: locale), systemImage: "apple.logo")
                         .foregroundStyle(.secondary)
-                } else {
-                    Text(EntrevoixLocalization.text("provider.edit_hint", defaultValue: "Edit endpoint, credentials, routes, and model in Providers.", locale: locale)).foregroundStyle(.secondary)
                 }
                 Picker(EntrevoixLocalization.text("field.stt_language", defaultValue: "Transcription language", locale: locale), selection: Binding(
                     get: { model.preferences.sttLanguage },
@@ -347,7 +345,7 @@ struct STTSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .settingsGroupedFormContentMargins()
+        .settingsFormContentMargins()
     }
 }
 
@@ -361,9 +359,12 @@ struct DictationDictionaryView: View {
     @FocusState private var newTermIsFocused: Bool
 
     private var filteredTerms: [String] {
+        let terms = model.preferences.dictationDictionary.sorted {
+            $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
+        }
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return model.preferences.dictationDictionary }
-        return model.preferences.dictationDictionary.filter {
+        guard !query.isEmpty else { return terms }
+        return terms.filter {
             $0.localizedCaseInsensitiveContains(query)
         }
     }
@@ -392,6 +393,7 @@ struct DictationDictionaryView: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
+            .padding(.horizontal, SettingsLayout.cardContentInset)
             .padding(.bottom, SettingsLayout.sectionSpacing)
             .listRowInsets(EdgeInsets())
             .listRowBackground(Color.clear)
@@ -411,6 +413,7 @@ struct DictationDictionaryView: View {
                         : EntrevoixLocalization.text("library.no_results", defaultValue: "No matching items", locale: locale),
                     systemImage: "textformat.abc"
                 )
+                .listRowInsets(EdgeInsets())
             } else {
                 ForEach(filteredTerms, id: \.self) { term in
                     if editingTerm == term {
@@ -423,7 +426,11 @@ struct DictationDictionaryView: View {
                             Button {
                                 beginEditing(term)
                             } label: {
-                                SettingsLibraryRow(title: term, systemImage: "textformat.abc")
+                                Text(term)
+                                    .foregroundStyle(.primary)
+                                    .padding(.leading, SettingsLayout.cardContentInset)
+                                    .padding(.vertical, SettingsLayout.listRowVerticalInset)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .buttonStyle(.plain)
                             .contentShape(Rectangle())
@@ -454,16 +461,17 @@ struct DictationDictionaryView: View {
                             .fixedSize()
                             .accessibilityLabel(EntrevoixLocalization.text("dictation_dictionary.actions", defaultValue: "Term actions", locale: locale))
                         }
+                        .listRowInsets(EdgeInsets())
                         .listRowSeparator(term == filteredTerms.last ? .hidden : .visible, edges: .bottom)
                     }
                 }
             }
         }
         .listStyle(.inset)
-        .settingsPageContentMargins()
+        .settingsInsetListContentMargins()
         .scrollBounceBehavior(.always)
         .scrollEdgeEffectStyle(.soft, for: .top)
-        .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
+        .contentMargins(.bottom, SettingsLayout.contentBottomInset, for: .scrollContent)
         .searchable(
             text: $searchText,
             placement: .toolbar,
@@ -492,10 +500,7 @@ struct DictationDictionaryView: View {
         locale: Locale,
         showsBottomSeparator: Bool
     ) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "textformat.abc")
-                .foregroundStyle(.tint)
-                .frame(width: 16)
+        HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     TextField(
@@ -507,20 +512,6 @@ struct DictationDictionaryView: View {
                     .onSubmit(commitDictionaryTerm)
                     .onExitCommand(perform: cancelDictionaryTerm)
                     .onChange(of: newTerm) { _, _ in addError = false }
-
-                    Button(action: commitDictionaryTerm) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.tint)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(EntrevoixLocalization.text("action.save", defaultValue: "Save", locale: locale))
-
-                    Button(action: cancelDictionaryTerm) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(EntrevoixLocalization.text("dictation_dictionary.cancel", defaultValue: "Cancel", locale: locale))
                 }
                 if addError {
                     Text(EntrevoixLocalization.text(
@@ -532,15 +523,33 @@ struct DictationDictionaryView: View {
                     .foregroundStyle(.orange)
                 }
             }
+            .padding(.leading, SettingsLayout.cardContentInset)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button(action: commitDictionaryTerm) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.tint)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(EntrevoixLocalization.text("action.save", defaultValue: "Save", locale: locale))
+
+            Button(action: cancelDictionaryTerm) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(EntrevoixLocalization.text("dictation_dictionary.cancel", defaultValue: "Cancel", locale: locale))
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, SettingsLayout.listRowVerticalInset)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .listRowInsets(EdgeInsets())
         .listRowBackground(Color(nsColor: .controlBackgroundColor))
         .listRowSeparator(.hidden, edges: .bottom)
         .overlay(alignment: .bottom) {
             if showsBottomSeparator {
                 Divider()
                     .frame(maxWidth: .infinity)
+                    .padding(.leading, SettingsLayout.cardContentInset)
             }
         }
     }
@@ -638,7 +647,7 @@ struct CleanupSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .settingsGroupedFormContentMargins()
+        .settingsFormContentMargins()
     }
 }
 
@@ -850,10 +859,10 @@ private struct PromptListPage: View {
             .listSectionSeparator(.hidden)
         }
         .listStyle(.inset)
-        .settingsPageContentMargins()
+        .settingsInsetListContentMargins()
         .scrollBounceBehavior(.always)
         .scrollEdgeEffectStyle(.soft, for: .top)
-        .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
+        .contentMargins(.bottom, SettingsLayout.contentBottomInset, for: .scrollContent)
         .navigationBarBackButtonHidden(true)
         .searchable(
             text: $searchText,
@@ -1130,6 +1139,7 @@ private struct PromptEditor: View {
             }
         }
         .formStyle(.grouped)
+        .settingsFormContentMargins()
     }
 }
 

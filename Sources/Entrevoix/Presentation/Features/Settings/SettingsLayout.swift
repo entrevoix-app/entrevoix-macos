@@ -1,10 +1,12 @@
 import SwiftUI
 
 enum SettingsLayout {
-    static let pageInset: CGFloat = 12
+    static let contentHorizontalInset: CGFloat = 20
+    static let insetListHorizontalCompensation: CGFloat = 4
+    static let contentBottomInset: CGFloat = 12
     static let toolbarContentInset: CGFloat = 8
     static let cardContentInset: CGFloat = 16
-    static let groupedFormHorizontalInset: CGFloat = 20
+    static let listRowVerticalInset: CGFloat = 8
     static let promptInstructionsEditorHeight: CGFloat = 320
     static let promptInstructionsEditorInset: CGFloat = 8
     static let gridSpacing: CGFloat = 8
@@ -15,15 +17,16 @@ enum SettingsLayout {
 
 extension View {
     func settingsPageContentMargins() -> some View {
-        contentMargins(.horizontal, SettingsLayout.pageInset, for: .scrollContent)
+        contentMargins(.horizontal, SettingsLayout.contentHorizontalInset, for: .scrollContent)
             .contentMargins(.top, SettingsLayout.toolbarContentInset, for: .scrollContent)
     }
 
-    func settingsGroupedFormContentMargins() -> some View {
-        contentMargins(
-            .horizontal,
-            SettingsLayout.pageInset - SettingsLayout.groupedFormHorizontalInset,
-            for: .scrollContent
-        )
+    func settingsFormContentMargins() -> some View {
+        contentMargins(.top, SettingsLayout.toolbarContentInset, for: .scrollContent)
+    }
+
+    func settingsInsetListContentMargins() -> some View {
+        padding(.horizontal, SettingsLayout.insetListHorizontalCompensation)
+            .contentMargins(.top, SettingsLayout.toolbarContentInset, for: .scrollContent)
     }
 }

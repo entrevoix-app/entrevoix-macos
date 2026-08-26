@@ -19,7 +19,7 @@ enum LocalizationDiagnostic {
             exit(64)
         }
 
-        guard EntrevoixLocalization.resourceURL(forResource: "openai-blossom-black", withExtension: "webp") != nil else {
+        guard EntrevoixLocalization.resourceURL(forResource: "openai-blossom", withExtension: "svg") != nil else {
             fputs("Missing OpenAI provider icon resource.\n", stderr)
             exit(1)
         }

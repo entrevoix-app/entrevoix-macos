@@ -112,9 +112,9 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .general: EntrevoixLocalization.text("settings.general", defaultValue: "General", locale: locale)
         case .providers: EntrevoixLocalization.text("settings.providers", defaultValue: "Providers", locale: locale)
-        case .stt: EntrevoixLocalization.text("settings.stt", defaultValue: "STT Transcription", locale: locale)
+        case .stt: EntrevoixLocalization.text("settings.stt", defaultValue: "Transcription", locale: locale)
         case .dictationDictionary: EntrevoixLocalization.text("settings.dictation_dictionary", defaultValue: "Dictation Dictionary", locale: locale)
-        case .cleanup: EntrevoixLocalization.text("settings.ttt", defaultValue: "TTT Cleanup", locale: locale)
+        case .cleanup: EntrevoixLocalization.text("settings.ttt", defaultValue: "Cleanup", locale: locale)
         case .prompts: EntrevoixLocalization.text("settings.prompts", defaultValue: "Prompts", locale: locale)
         case .workflows: EntrevoixLocalization.text("settings.workflows", defaultValue: "Workflows", locale: locale)
         }

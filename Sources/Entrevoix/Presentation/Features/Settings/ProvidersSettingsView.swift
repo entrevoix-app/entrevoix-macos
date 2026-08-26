@@ -82,7 +82,7 @@ struct ProvidersSettingsView: View {
                 }
             }
             .formStyle(.grouped)
-            .settingsGroupedFormContentMargins()
+            .settingsFormContentMargins()
         } else if selection == .codex, let profile = model.preferences.provider(for: .codex)?.codexProfile {
             CodexProviderEditor(model: model, profile: profile)
         } else if let draft {
@@ -167,6 +167,7 @@ struct ProviderCatalogView: View {
                                 ProviderSummaryCard(entry: entry, onConfigure: { onConfigure(entry) })
                                 if index < providers.index(before: providers.endIndex) {
                                     Divider()
+                                        .padding(.leading, ProviderSummaryCard.textLeadingInset)
                                 }
                             }
                         }
@@ -216,7 +217,7 @@ struct ProviderCatalogView: View {
             }
         }
         .settingsPageContentMargins()
-        .contentMargins(.bottom, SettingsLayout.pageInset, for: .scrollContent)
+        .contentMargins(.bottom, SettingsLayout.contentBottomInset, for: .scrollContent)
     }
 
     private func text(_ key: String, _ fallback: String) -> String {
@@ -225,12 +226,16 @@ struct ProviderCatalogView: View {
 }
 
 private struct ProviderSummaryCard: View {
+    static let contentInset: CGFloat = 12
+    static let iconSpacing: CGFloat = 12
+    static let textLeadingInset = contentInset + ProviderIcon.size + iconSpacing
+
     @Environment(ProviderStore.self) private var model
     let entry: ProviderCatalogEntry
     let onConfigure: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Self.iconSpacing) {
             ProviderIcon(icon: icon(for: entry))
 
             VStack(alignment: .leading, spacing: 2) {
@@ -246,8 +251,7 @@ private struct ProviderSummaryCard: View {
             Button(text("action.configure", "Configure"), action: onConfigure)
                 .buttonStyle(.borderedProminent)
         }
-        .padding(12)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(Self.contentInset)
     }
 
     private func capabilities(for entry: ProviderCatalogEntry) -> String {
@@ -294,8 +298,9 @@ private struct ProviderAddCard: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
             .background(
-                isHovering ? Color.accentColor.opacity(0.05) : Color(nsColor: .controlBackgroundColor),
+                isHovering ? Color.accentColor.opacity(0.05) : .clear,
                 in: RoundedRectangle(cornerRadius: 12, style: .continuous)
             )
         }
@@ -306,13 +311,14 @@ private struct ProviderAddCard: View {
 }
 
 private struct ProviderIcon: View {
+    static let size: CGFloat = 28
+
     enum Kind {
         case openAI
         case anthropic
         case system(String)
     }
 
-    @Environment(\.colorScheme) private var colorScheme
     let icon: Kind
 
     var body: some View {
@@ -322,8 +328,10 @@ private struct ProviderIcon: View {
                 if let image = openAIImage {
                     Image(nsImage: image)
                         .resizable()
+                        .renderingMode(.template)
+                        .foregroundStyle(.primary)
                         .scaledToFit()
-                        .frame(width: 30, height: 30)
+                        .frame(width: Self.size, height: Self.size)
                 } else {
                     Image(systemName: "circle.grid.2x2")
                         .symbolRenderingMode(.hierarchical)
@@ -336,7 +344,7 @@ private struct ProviderIcon: View {
                         .renderingMode(.template)
                         .foregroundStyle(.primary)
                         .scaledToFit()
-                        .frame(width: 30, height: 30)
+                        .frame(width: 20, height: 20)
                 } else {
                     Image(systemName: "sparkles")
                         .symbolRenderingMode(.hierarchical)
@@ -348,10 +356,13 @@ private struct ProviderIcon: View {
                     .foregroundStyle(Color.accentColor)
             }
         }
-            .frame(width: 28, height: 28)
+            .frame(width: Self.size, height: Self.size)
             .background(backgroundColor, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
             .overlay {
                 if case .openAI = icon {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+                } else if case .anthropic = icon {
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
                         .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
                 }
@@ -360,13 +371,16 @@ private struct ProviderIcon: View {
     }
 
     private var openAIImage: NSImage? {
-        let resource = colorScheme == .dark ? "openai-blossom-white" : "openai-blossom-black"
-        guard let url = EntrevoixLocalization.resourceURL(forResource: resource, withExtension: "webp") else { return nil }
-        return NSImage(contentsOf: url)
+        guard let url = EntrevoixLocalization.resourceURL(forResource: "openai-blossom", withExtension: "svg"),
+              let image = NSImage(contentsOf: url) else {
+            return nil
+        }
+        image.isTemplate = true
+        return image
     }
 
     private var anthropicImage: NSImage? {
-        guard let url = EntrevoixLocalization.resourceURL(forResource: "anthropic-ai", withExtension: "webp"),
+        guard let url = EntrevoixLocalization.resourceURL(forResource: "anthropic-ai", withExtension: "svg"),
               let image = NSImage(contentsOf: url) else {
             return nil
         }
@@ -407,7 +421,7 @@ private struct CodexProviderEditor: View {
             }
         }
         .formStyle(.grouped)
-        .settingsGroupedFormContentMargins()
+        .settingsFormContentMargins()
     }
 
     private func text(_ key: String, _ fallback: String) -> String {
@@ -514,7 +528,7 @@ private struct RemoteProviderEditor: View {
             if let first = validation.first { Label(first.localizedProviderValidationTitle(locale: model.interfaceLocale), systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
         }
         .formStyle(.grouped)
-        .settingsGroupedFormContentMargins()
+        .settingsFormContentMargins()
     }
 
     private func text(_ key: String, _ fallback: String) -> String {
