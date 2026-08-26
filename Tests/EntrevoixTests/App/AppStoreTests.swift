@@ -69,6 +69,21 @@ final class AppStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testRemoteProviderSavesItsSelectedSTTUploadFormat() {
+        let context = makeContext()
+        var profile = context.model.newRemoteProvider(kind: .openAICompatible)
+        profile.name = "Compact uploads"
+        profile.baseURL = "https://stt.example.com/v1"
+        profile.stt?.uploadFormat = .m4aAAC
+
+        XCTAssertTrue(context.model.saveRemoteProvider(profile, apiKey: "profile-secret").isEmpty)
+        let savedProfile = context.model.preferences.remoteProfile(for: .remote(profile.id))
+
+        XCTAssertEqual(savedProfile?.stt?.uploadFormat, .m4aAAC)
+        XCTAssertEqual(savedProfile?.configuration(for: .stt)?.audioUploadFormat, .m4aAAC)
+    }
+
+    @MainActor
     func testOnboardingAddsOrReusesAnOpenAIProviderAndCommitsItsKey() {
         let context = makeContext()
 
