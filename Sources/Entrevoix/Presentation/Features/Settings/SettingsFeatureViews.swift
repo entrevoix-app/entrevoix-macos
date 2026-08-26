@@ -322,8 +322,6 @@ struct STTSettingsView: View {
                 } else if model.preferences.selectedSTTProviderID == .apple {
                     Label(EntrevoixLocalization.text("provider.apple_speech_hint", defaultValue: "Apple Speech runs locally. A supported speech asset must be downloaded and ready before recording.", locale: locale), systemImage: "apple.logo")
                         .foregroundStyle(.secondary)
-                } else {
-                    Text(EntrevoixLocalization.text("provider.edit_hint", defaultValue: "Edit endpoint, credentials, routes, and model in Providers.", locale: locale)).foregroundStyle(.secondary)
                 }
                 Picker(EntrevoixLocalization.text("field.stt_language", defaultValue: "Transcription language", locale: locale), selection: Binding(
                     get: { model.preferences.sttLanguage },
