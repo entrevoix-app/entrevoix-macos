@@ -6,6 +6,7 @@ enum SettingsLayout {
     static let contentBottomInset: CGFloat = 12
     static let toolbarContentInset: CGFloat = 8
     static let cardContentInset: CGFloat = 16
+    static let listRowVerticalInset: CGFloat = 8
     static let promptInstructionsEditorHeight: CGFloat = 320
     static let promptInstructionsEditorInset: CGFloat = 8
     static let gridSpacing: CGFloat = 8

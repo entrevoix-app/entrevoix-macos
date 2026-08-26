@@ -425,7 +425,10 @@ struct DictationDictionaryView: View {
                             Button {
                                 beginEditing(term)
                             } label: {
-                                SettingsLibraryRow(title: term, systemImage: "textformat.abc")
+                                Text(term)
+                                    .foregroundStyle(.primary)
+                                    .padding(.vertical, SettingsLayout.listRowVerticalInset)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .buttonStyle(.plain)
                             .contentShape(Rectangle())
@@ -537,7 +540,7 @@ struct DictationDictionaryView: View {
                 }
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, SettingsLayout.listRowVerticalInset)
         .padding(.horizontal, SettingsLayout.cardContentInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .listRowInsets(EdgeInsets())
