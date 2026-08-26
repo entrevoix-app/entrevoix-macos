@@ -502,10 +502,7 @@ struct DictationDictionaryView: View {
         locale: Locale,
         showsBottomSeparator: Bool
     ) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "textformat.abc")
-                .foregroundStyle(.tint)
-                .frame(width: 16)
+        HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     TextField(
@@ -517,20 +514,6 @@ struct DictationDictionaryView: View {
                     .onSubmit(commitDictionaryTerm)
                     .onExitCommand(perform: cancelDictionaryTerm)
                     .onChange(of: newTerm) { _, _ in addError = false }
-
-                    Button(action: commitDictionaryTerm) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.tint)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(EntrevoixLocalization.text("action.save", defaultValue: "Save", locale: locale))
-
-                    Button(action: cancelDictionaryTerm) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(EntrevoixLocalization.text("dictation_dictionary.cancel", defaultValue: "Cancel", locale: locale))
                 }
                 if addError {
                     Text(EntrevoixLocalization.text(
@@ -542,9 +525,24 @@ struct DictationDictionaryView: View {
                     .foregroundStyle(.orange)
                 }
             }
+            .padding(.leading, SettingsLayout.cardContentInset)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button(action: commitDictionaryTerm) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.tint)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(EntrevoixLocalization.text("action.save", defaultValue: "Save", locale: locale))
+
+            Button(action: cancelDictionaryTerm) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(EntrevoixLocalization.text("dictation_dictionary.cancel", defaultValue: "Cancel", locale: locale))
         }
         .padding(.vertical, SettingsLayout.listRowVerticalInset)
-        .padding(.horizontal, SettingsLayout.cardContentInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .listRowInsets(EdgeInsets())
         .listRowBackground(Color(nsColor: .controlBackgroundColor))
@@ -553,6 +551,7 @@ struct DictationDictionaryView: View {
             if showsBottomSeparator {
                 Divider()
                     .frame(maxWidth: .infinity)
+                    .padding(.leading, SettingsLayout.cardContentInset)
             }
         }
     }
