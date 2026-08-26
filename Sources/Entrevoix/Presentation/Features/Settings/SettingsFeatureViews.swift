@@ -427,6 +427,7 @@ struct DictationDictionaryView: View {
                             } label: {
                                 Text(term)
                                     .foregroundStyle(.primary)
+                                    .padding(.leading, SettingsLayout.cardContentInset)
                                     .padding(.vertical, SettingsLayout.listRowVerticalInset)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
@@ -459,7 +460,6 @@ struct DictationDictionaryView: View {
                             .fixedSize()
                             .accessibilityLabel(EntrevoixLocalization.text("dictation_dictionary.actions", defaultValue: "Term actions", locale: locale))
                         }
-                        .padding(.horizontal, SettingsLayout.cardContentInset)
                         .listRowInsets(EdgeInsets())
                         .listRowSeparator(term == filteredTerms.last ? .hidden : .visible, edges: .bottom)
                     }
