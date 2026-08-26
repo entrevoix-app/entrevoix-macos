@@ -336,7 +336,7 @@ private struct ProviderIcon: View {
                         .renderingMode(.template)
                         .foregroundStyle(.primary)
                         .scaledToFit()
-                        .frame(width: 30, height: 30)
+                        .frame(width: 20, height: 20)
                 } else {
                     Image(systemName: "sparkles")
                         .symbolRenderingMode(.hierarchical)
@@ -354,6 +354,9 @@ private struct ProviderIcon: View {
                 if case .openAI = icon {
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
                         .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+                } else if case .anthropic = icon {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
@@ -366,7 +369,7 @@ private struct ProviderIcon: View {
     }
 
     private var anthropicImage: NSImage? {
-        guard let url = EntrevoixLocalization.resourceURL(forResource: "anthropic-ai", withExtension: "webp"),
+        guard let url = EntrevoixLocalization.resourceURL(forResource: "anthropic-ai", withExtension: "svg"),
               let image = NSImage(contentsOf: url) else {
             return nil
         }
