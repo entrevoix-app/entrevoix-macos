@@ -203,7 +203,7 @@ struct ProviderCatalogView: View {
                         )
                         ProviderAddCard(
                             title: text("provider.anthropic", "Anthropic"),
-                            icon: .system("sparkles"),
+                            icon: .anthropic,
                             action: { onAddRemote(model.newRemoteProvider(kind: .anthropic)) }
                         )
                         ProviderAddCard(
@@ -264,7 +264,7 @@ private struct ProviderSummaryCard: View {
         case .remote(let profile):
             switch profile.kind {
             case .openAI: .openAI
-            case .anthropic: .system("sparkles")
+            case .anthropic: .anthropic
             case .openAICompatible: .system("network")
             }
         }
@@ -308,6 +308,7 @@ private struct ProviderAddCard: View {
 private struct ProviderIcon: View {
     enum Kind {
         case openAI
+        case anthropic
         case system(String)
     }
 
@@ -325,6 +326,19 @@ private struct ProviderIcon: View {
                         .frame(width: 30, height: 30)
                 } else {
                     Image(systemName: "circle.grid.2x2")
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(Color.accentColor)
+                }
+            case .anthropic:
+                if let image = anthropicImage {
+                    Image(nsImage: image)
+                        .resizable()
+                        .renderingMode(.template)
+                        .foregroundStyle(.primary)
+                        .scaledToFit()
+                        .frame(width: 30, height: 30)
+                } else {
+                    Image(systemName: "sparkles")
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(Color.accentColor)
                 }
@@ -351,11 +365,22 @@ private struct ProviderIcon: View {
         return NSImage(contentsOf: url)
     }
 
-    private var backgroundColor: Color {
-        if case .openAI = icon {
-            return Color(nsColor: .controlBackgroundColor)
+    private var anthropicImage: NSImage? {
+        guard let url = EntrevoixLocalization.resourceURL(forResource: "anthropic-ai", withExtension: "webp"),
+              let image = NSImage(contentsOf: url) else {
+            return nil
         }
-        return Color.accentColor.opacity(0.14)
+        image.isTemplate = true
+        return image
+    }
+
+    private var backgroundColor: Color {
+        switch icon {
+        case .openAI, .anthropic:
+            return Color(nsColor: .controlBackgroundColor)
+        case .system:
+            return Color.accentColor.opacity(0.14)
+        }
     }
 }
 
