@@ -155,7 +155,7 @@ struct EntrevoixApp: App {
         }
     }
 
-    private func iconName(for state: DictationState?) -> String {
+    private func statusIconName(for state: DictationState?) -> String? {
         guard let state else { return "exclamationmark.triangle.fill" }
         switch state {
         case .recording:
@@ -165,15 +165,18 @@ struct EntrevoixApp: App {
         case .error:
             return "exclamationmark.triangle.fill"
         default:
-            return "waveform"
+            return nil
         }
     }
 
     private func menuBarImage(for state: DictationState?) -> NSImage {
         let size: CGFloat = 18
+        guard let statusIconName = statusIconName(for: state) else {
+            return EntrevoixMenuBarMark.image(size: size)
+        }
         let configuration = NSImage.SymbolConfiguration(pointSize: size, weight: .semibold)
         guard let image = NSImage(
-            systemSymbolName: iconName(for: state),
+            systemSymbolName: statusIconName,
             accessibilityDescription: "Entrevoix"
         )?.withSymbolConfiguration(configuration) else {
             return NSImage(size: .init(width: size, height: size))
@@ -212,6 +215,43 @@ struct EntrevoixApp: App {
         } else {
             NSApplication.shared.terminate(nil)
         }
+    }
+}
+
+private enum EntrevoixMenuBarMark {
+    private static let waveformBounds = CGRect(x: 196, y: 184, width: 632, height: 656)
+    private static let waveformBars: [CGRect] = [
+        .init(x: 196, y: 397, width: 88, height: 230),
+        .init(x: 332, y: 292, width: 88, height: 440),
+        .init(x: 468, y: 184, width: 88, height: 656),
+        .init(x: 604, y: 292, width: 88, height: 440),
+        .init(x: 740, y: 397, width: 88, height: 230)
+    ]
+
+    static func image(size: CGFloat) -> NSImage {
+        let image = NSImage(size: .init(width: size, height: size))
+        image.lockFocus()
+        NSColor.black.setFill()
+
+        let renderedHeight = min(size * 0.9, 16)
+        let scale = renderedHeight / waveformBounds.height
+        let horizontalInset = (size - waveformBounds.width * scale) / 2
+        let verticalInset = (size - renderedHeight) / 2
+        let offset = CGSize(
+            width: horizontalInset - waveformBounds.minX * scale,
+            height: verticalInset - waveformBounds.minY * scale
+        )
+        for bar in waveformBars {
+            NSBezierPath(
+                roundedRect: bar.applying(.init(scaleX: scale, y: scale)).offsetBy(dx: offset.width, dy: offset.height),
+                xRadius: 44 * scale,
+                yRadius: 44 * scale
+            ).fill()
+        }
+
+        image.unlockFocus()
+        image.isTemplate = true
+        return image
     }
 }
 
