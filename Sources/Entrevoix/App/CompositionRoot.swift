@@ -124,6 +124,7 @@ enum CompositionRoot {
             audioInputDevices: audioInputDevices,
             updater: updater,
             cleanupLibraryCloudSync: CleanupLibraryCloudSync(),
+            dictationDictionaryCloudSync: DictationDictionaryCloudSync(),
             logStore: logStore,
             now: Date.init
         ), initialPreferences: initialPreferences)

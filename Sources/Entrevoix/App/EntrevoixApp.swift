@@ -58,6 +58,9 @@ struct EntrevoixApp: App {
                     .onReceive(NotificationCenter.default.publisher(for: .cleanupLibraryCloudChange)) { _ in
                         model.refreshCleanupLibrary()
                     }
+                    .onReceive(NotificationCenter.default.publisher(for: .dictationDictionaryCloudChange)) { _ in
+                        model.refreshDictationDictionary()
+                    }
             } else {
                 Text(EntrevoixLocalization.text("startup.incompatible.title", defaultValue: "Entrevoix Update Required", locale: Locale(identifier: "en")))
                 .task {

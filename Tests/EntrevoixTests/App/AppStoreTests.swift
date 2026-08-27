@@ -1016,6 +1016,9 @@ final class AppStoreTests: XCTestCase {
             cleanupLibraryCloudSync: CleanupLibraryCloudSync(
                 store: CleanupLibraryCloudStoreSpy(remoteLibrary: nil)
             ),
+            dictationDictionaryCloudSync: DictationDictionaryCloudSync(
+                store: DictationDictionaryCloudStoreSpy(remoteTerms: nil)
+            ),
             logStore: logs,
             now: { clock.value }
         ), initialPreferences: preferences)
