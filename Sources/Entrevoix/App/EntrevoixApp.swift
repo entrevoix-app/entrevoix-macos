@@ -20,8 +20,14 @@ struct EntrevoixApp: App {
         if KeyboardShortcutsDiagnostic.runIfRequested() {
             exit(0)
         }
-        _launchState = State(initialValue: CompositionRoot.makeLaunchState())
+        let initialLaunchState = CompositionRoot.makeLaunchState()
+        _launchState = State(initialValue: initialLaunchState)
         _dockPresenceController = State(initialValue: DockPresenceController())
+        if case .ready(let environment, _) = initialLaunchState {
+            Task { @MainActor in
+                environment.appStore.requestUnresolvedPermissionsAtLaunch()
+            }
+        }
     }
 
     var body: some Scene {

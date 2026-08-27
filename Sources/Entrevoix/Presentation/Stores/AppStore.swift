@@ -329,6 +329,10 @@ final class AppStore {
         launchAtLoginService.isEnabled
     }
 
+    func requestUnresolvedPermissionsAtLaunch() {
+        permissionsModel.requestUnresolvedPermissionsAtLaunch()
+    }
+
     func completeOnboarding() {
         preferences.hasCompletedOnboarding = true
         savePreferences()

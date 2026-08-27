@@ -30,6 +30,15 @@ final class PermissionsStore {
         return provider.accessibilityPermission
     }
 
+    func requestUnresolvedPermissionsAtLaunch() {
+        if microphonePermission == .notDetermined {
+            requestMicrophonePermission()
+        }
+        if accessibilityPermission != .granted {
+            requestAccessibilityPermission()
+        }
+    }
+
     func requestMicrophonePermission() {
         microphonePermissionRepairFeedback = nil
         Task { [weak self] in
