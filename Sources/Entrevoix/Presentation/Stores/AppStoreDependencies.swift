@@ -22,6 +22,7 @@ struct AppStoreDependencies {
     let audioInputDevices: any AudioInputDeviceDiscovering
     let updater: any ApplicationUpdating
     let cleanupLibraryCloudSync: CleanupLibraryCloudSync
+    let dictationDictionaryCloudSync: DictationDictionaryCloudSync
     let logStore: AppLogStore
     let now: () -> Date
 
@@ -45,13 +46,14 @@ struct AppStoreDependencies {
         audioInputDevices: any AudioInputDeviceDiscovering = UnavailableAudioInputDeviceCatalog(),
         updater: any ApplicationUpdating = UnavailableApplicationUpdater(),
         cleanupLibraryCloudSync: CleanupLibraryCloudSync,
+        dictationDictionaryCloudSync: DictationDictionaryCloudSync,
         logStore: AppLogStore,
         now: @escaping () -> Date
     ) {
         self.coordinator = coordinator; self.connectionTest = connectionTest; self.textDelivery = textDelivery; self.cleanupPromptExportReader = cleanupPromptExportReader
         self.preferencesStore = preferencesStore; self.keychain = keychain; self.codexCredentials = codexCredentials; self.codexAuthenticator = codexAuthenticator; self.modelCatalog = modelCatalog; self.audioCaptureTrimmingResources = audioCaptureTrimmingResources; self.providerAlerts = providerAlerts
         self.hotkeys = hotkeys; self.launchAtLogin = launchAtLogin; self.feedback = feedback
-        self.listeningIndicator = listeningIndicator; self.permissions = permissions; self.audioInputDevices = audioInputDevices; self.updater = updater; self.cleanupLibraryCloudSync = cleanupLibraryCloudSync; self.logStore = logStore
+        self.listeningIndicator = listeningIndicator; self.permissions = permissions; self.audioInputDevices = audioInputDevices; self.updater = updater; self.cleanupLibraryCloudSync = cleanupLibraryCloudSync; self.dictationDictionaryCloudSync = dictationDictionaryCloudSync; self.logStore = logStore
         self.now = now
     }
 }

@@ -13,6 +13,7 @@ final class AppStore {
     let permissionsModel: PermissionsStore
     let promptLibrary: PromptLibraryStore
     private let cleanupLibraryCloudSync: CleanupLibraryCloudSync
+    private let dictationDictionaryCloudSync: DictationDictionaryCloudSync
     let updates: UpdateStore
     private let launchAtLoginService: any LaunchAtLoginControlling
     let logStore: AppLogStore
@@ -204,6 +205,7 @@ final class AppStore {
               !preferences.dictationDictionary.contains(term) else { return false }
         preferences.dictationDictionary.append(term)
         savePreferences()
+        dictationDictionaryCloudSync.publish(preferences.dictationDictionary)
         return true
     }
 
@@ -211,6 +213,7 @@ final class AppStore {
         guard let index = preferences.dictationDictionary.firstIndex(of: term) else { return }
         preferences.dictationDictionary.remove(at: index)
         savePreferences()
+        dictationDictionaryCloudSync.publish(preferences.dictationDictionary)
     }
 
     @discardableResult
@@ -220,6 +223,7 @@ final class AppStore {
               updatedTerm == term || !preferences.dictationDictionary.contains(updatedTerm) else { return false }
         preferences.dictationDictionary[index] = updatedTerm
         savePreferences()
+        dictationDictionaryCloudSync.publish(preferences.dictationDictionary)
         return true
     }
 
@@ -251,6 +255,8 @@ final class AppStore {
         self.permissionsModel = permissionsModel
         let cleanupLibraryCloudSync = dependencies.cleanupLibraryCloudSync
         self.cleanupLibraryCloudSync = cleanupLibraryCloudSync
+        let dictationDictionaryCloudSync = dependencies.dictationDictionaryCloudSync
+        self.dictationDictionaryCloudSync = dictationDictionaryCloudSync
         let promptLibrary = PromptLibraryStore(
             preferencesModel: preferencesModel,
             exportReader: dependencies.cleanupPromptExportReader,
@@ -279,6 +285,16 @@ final class AppStore {
                 workflows: initialPreferences.cleanupWorkflows
             ),
             seedLocalLibrary: promptLibrary.differsFromDefault
+        )
+        dictationDictionaryCloudSync.onRemoteTerms = { [weak preferencesModel] terms in
+            guard let preferencesModel else { return }
+            var preferences = preferencesModel.preferences
+            preferences.dictationDictionary = AppPreferences.normalizedDictationDictionary(terms)
+            preferencesModel.update(preferences, to: .immediate)
+        }
+        dictationDictionaryCloudSync.start(
+            with: initialPreferences.dictationDictionary,
+            seedLocalTerms: !initialPreferences.dictationDictionary.isEmpty
         )
         let connectionTestStore = ConnectionTestStore(
             coordinator: dependencies.connectionTest,
@@ -404,6 +420,10 @@ final class AppStore {
 
     func refreshCleanupLibrary() {
         cleanupLibraryCloudSync.refresh()
+    }
+
+    func refreshDictationDictionary() {
+        dictationDictionaryCloudSync.refresh()
     }
 
     var state: DictationState { dictationSession.state }
