@@ -56,6 +56,22 @@ final class AudioRecorderTests: XCTestCase {
         XCTAssertEqual(engine.discardCount, 0)
     }
 
+    func testSystemDefaultEngineIsRecreatedWhenItsDeviceChanges() throws {
+        let staleEngine = AudioCaptureEngineSpy(isReusableResult: false)
+        let replacementEngine = AudioCaptureEngineSpy()
+        let factory = AudioCaptureEngineFactorySpy(engines: [staleEngine, replacementEngine])
+        let recorder = AudioRecorder(logger: AppLogStore(), captureEngineFactory: factory)
+
+        try recorder.start(input: .systemDefault)
+        recorder.cancel()
+        try recorder.start(input: .systemDefault)
+        recorder.cancel()
+
+        XCTAssertEqual(factory.makeCount, 2)
+        XCTAssertEqual(staleEngine.discardCount, 1)
+        XCTAssertEqual(replacementEngine.configuredInputs, [.systemDefault])
+    }
+
     func testSelectedInputUsesItsOwnCaptureEngine() throws {
         let systemEngine = AudioCaptureEngineSpy()
         let selectedEngine = AudioCaptureEngineSpy()
@@ -98,43 +114,6 @@ final class AudioRecorderTests: XCTestCase {
         XCTAssertEqual(failedEngine.discardCount, 1)
         XCTAssertEqual(factory.makeCount, 2)
         XCTAssertEqual(replacementEngine.startCaptureCount, 1)
-    }
-
-    func testCaptureTapRunsOutsideTheMainActor() throws {
-        let inputFormat = try XCTUnwrap(AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: 48_000,
-            channels: 1,
-            interleaved: false
-        ))
-        let url = try appTemporaryFile()
-        try FileManager.default.removeItem(at: url)
-        defer { try? FileManager.default.removeItem(at: url) }
-        let writer = try AudioCaptureWriter(inputFormat: inputFormat, outputURL: url)
-        let tap = LiveAudioCaptureEngine.makeCaptureTap(writer: writer)
-
-        let audioQueue = DispatchQueue(label: "AudioRecorderTests.captureTap")
-        let completed = expectation(description: "Capture tap completed")
-        audioQueue.async {
-            dispatchPrecondition(condition: .onQueue(audioQueue))
-            dispatchPrecondition(condition: .notOnQueue(.main))
-            guard let callbackFormat = AVAudioFormat(
-                commonFormat: .pcmFormatFloat32,
-                sampleRate: 48_000,
-                channels: 1,
-                interleaved: false
-            ), let buffer = AVAudioPCMBuffer(pcmFormat: callbackFormat, frameCapacity: 480) else {
-                XCTFail("Expected a valid callback buffer")
-                completed.fulfill()
-                return
-            }
-            buffer.frameLength = 480
-            tap(buffer, AVAudioTime())
-            completed.fulfill()
-        }
-        wait(for: [completed], timeout: 1)
-
-        XCTAssertEqual(writer.finish(), .success)
     }
 
     func testCaptureWriterConvertsStereoFloatInputToRequiredWAVFormatAndMetersIt() throws {
@@ -308,6 +287,7 @@ private final class AudioCaptureEngineSpy: AudioCaptureEngine {
     let inputFormat: AVAudioFormat
     let configureError: (any Error)?
     let startCaptureError: (any Error)?
+    let isReusableResult: Bool
 
     private(set) var configuredInputs: [AudioInputSelection] = []
     private(set) var startCaptureCount = 0
@@ -322,11 +302,13 @@ private final class AudioCaptureEngineSpy: AudioCaptureEngine {
             interleaved: false
         ),
         configureError: (any Error)? = nil,
-        startCaptureError: (any Error)? = nil
+        startCaptureError: (any Error)? = nil,
+        isReusableResult: Bool = true
     ) {
         self.inputFormat = inputFormat ?? AVAudioFormat()
         self.configureError = configureError
         self.startCaptureError = startCaptureError
+        self.isReusableResult = isReusableResult
     }
 
     func configure(input: AudioInputSelection) throws {
@@ -337,6 +319,10 @@ private final class AudioCaptureEngineSpy: AudioCaptureEngine {
     func startCapture(writer: AudioCaptureWriter) throws {
         startCaptureCount += 1
         if let startCaptureError { throw startCaptureError }
+    }
+
+    func isReusable(for input: AudioInputSelection) -> Bool {
+        isReusableResult
     }
 
     func pauseCapture() {

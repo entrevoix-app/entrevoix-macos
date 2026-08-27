@@ -1,5 +1,6 @@
 import AVFoundation
 import AudioToolbox
+import Dispatch
 import EntrevoixCore
 import Foundation
 import Synchronization
@@ -86,7 +87,9 @@ final class AudioRecorder: AudioRecording, AudioLevelProviding {
     /// Discarding the previous selection prevents a paused Bluetooth input from
     /// retaining its hands-free profile after the user switches microphones.
     private func captureEngine(for input: AudioInputSelection) throws -> any AudioCaptureEngine {
-        if let preparedEngine, preparedEngine.input == input {
+        if let preparedEngine,
+           preparedEngine.input == input,
+           preparedEngine.engine.isReusable(for: input) {
             return preparedEngine.engine
         }
 
@@ -164,9 +167,15 @@ protocol AudioCaptureEngine: AnyObject {
     var inputFormat: AVAudioFormat { get }
 
     func configure(input: AudioInputSelection) throws
+    func isReusable(for input: AudioInputSelection) -> Bool
     func startCapture(writer: AudioCaptureWriter) throws
     func pauseCapture()
     func discard()
+}
+
+extension AudioCaptureEngine {
+    /// Concrete test engines do not observe Core Audio device changes.
+    func isReusable(for _: AudioInputSelection) -> Bool { true }
 }
 
 @MainActor
@@ -177,16 +186,16 @@ protocol AudioCaptureEngineFactory: AnyObject {
 @MainActor
 final class LiveAudioCaptureEngineFactory: AudioCaptureEngineFactory {
     func makeCaptureEngine() -> any AudioCaptureEngine {
-        LiveAudioCaptureEngine()
+        HALInputCaptureEngine()
     }
 }
 
 @MainActor
-final class LiveAudioCaptureEngine: AudioCaptureEngine {
+final class HALInputCaptureEngine: AudioCaptureEngine {
     private var audioUnit: AudioUnit?
     private var callbackContext: HALInputCaptureContext?
     private var configuredInputFormat: AVAudioFormat?
-    private var isInitialized = false
+    private var configuredDeviceID: AudioDeviceID?
 
     var inputFormat: AVAudioFormat {
         configuredInputFormat ?? AVAudioFormat()
@@ -217,29 +226,35 @@ final class LiveAudioCaptureEngine: AudioCaptureEngine {
         do {
             try Self.setCurrentDevice(deviceID, on: audioUnit)
             let inputFormat = try Self.configureClientFormat(on: audioUnit)
-            let context = HALInputCaptureContext(inputFormat: inputFormat, audioUnit: audioUnit)
+            let context = try HALInputCaptureContext(inputFormat: inputFormat, audioUnit: audioUnit)
             try Self.installInputCallback(context, on: audioUnit)
             try Self.initialize(audioUnit)
 
             self.audioUnit = audioUnit
             callbackContext = context
             configuredInputFormat = inputFormat
-            isInitialized = true
+            configuredDeviceID = deviceID
         } catch {
             AudioComponentInstanceDispose(audioUnit)
             throw error
         }
     }
 
+    func isReusable(for input: AudioInputSelection) -> Bool {
+        guard let configuredDeviceID else { return false }
+        guard case .systemDefault = input else { return true }
+        return configuredDeviceID == Self.defaultInputDeviceID()
+    }
+
     func startCapture(writer: AudioCaptureWriter) throws {
-        guard let audioUnit, let callbackContext, isInitialized else {
+        guard let audioUnit, let callbackContext else {
             throw RecorderError.couldNotStart
         }
 
-        callbackContext.writer = writer
+        try callbackContext.startCapture(writer: writer)
         let status = AudioOutputUnitStart(audioUnit)
         guard status == noErr else {
-            callbackContext.writer = nil
+            callbackContext.discardCapture()
             throw RecorderError.audioDevice(status)
         }
     }
@@ -247,31 +262,19 @@ final class LiveAudioCaptureEngine: AudioCaptureEngine {
     func pauseCapture() {
         guard let audioUnit else { return }
         _ = AudioOutputUnitStop(audioUnit)
-        callbackContext?.writer = nil
+        callbackContext?.pauseCapture()
     }
 
     func discard() {
         guard let audioUnit else { return }
         _ = AudioOutputUnitStop(audioUnit)
-        callbackContext?.writer = nil
-        if isInitialized {
-            _ = AudioUnitUninitialize(audioUnit)
-        }
+        callbackContext?.discardCapture()
+        _ = AudioUnitUninitialize(audioUnit)
         _ = AudioComponentInstanceDispose(audioUnit)
         self.audioUnit = nil
         callbackContext = nil
         configuredInputFormat = nil
-        isInitialized = false
-    }
-
-    /// AVAudioEngine invokes taps on a realtime queue, so the block must not
-    /// inherit this recorder's main-actor isolation.
-    nonisolated static func makeCaptureTap(
-        writer: AudioCaptureWriter
-    ) -> @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void {
-        { buffer, _ in
-            writer.append(buffer)
-        }
+        configuredDeviceID = nil
     }
 
     private nonisolated static func makeInputOnlyAudioUnit() throws -> AudioUnit {
@@ -446,21 +449,71 @@ final class LiveAudioCaptureEngine: AudioCaptureEngine {
     }
 }
 
-/// The AUHAL input callback is serialized by Core Audio. The recorder changes
-/// `writer` only after `AudioOutputUnitStop` has returned, so this object can
-/// avoid hopping to the main actor for every audio buffer.
+/// Bridges the AUHAL realtime callback to the asynchronous WAV writer.
+///
+/// `state` serializes the callback with start/stop on the main actor. This is
+/// required because `AudioOutputUnitStop` can overlap a final render callback;
+/// closing the writer before that callback completes would race the WAV file.
 private final class HALInputCaptureContext: @unchecked Sendable {
-    private let inputFormat: AVAudioFormat
-    private let audioUnit: AudioUnit
-    private var inputBuffer: AVAudioPCMBuffer
-    var writer: AudioCaptureWriter?
+    private static let chunkFrameCapacity: AVAudioFrameCount = 8_192
+    private static let pooledChunkCount = 8
 
-    init(inputFormat: AVAudioFormat, audioUnit: AudioUnit) {
-        self.inputFormat = inputFormat
+    private struct State {
+        var writer: AudioCaptureWriter?
+        var activeChunk: AudioCaptureBuffer?
+    }
+
+    private let audioUnit: AudioUnit
+    private let renderBuffer: AVAudioPCMBuffer
+    private let chunkPool: AudioCaptureBufferPool
+    private let state: Mutex<State>
+
+    init(inputFormat: AVAudioFormat, audioUnit: AudioUnit) throws {
         self.audioUnit = audioUnit
-        // 8,192 frames covers the usual Core Audio callback size while keeping
-        // the realtime path allocation-free in normal operation.
-        inputBuffer = AVAudioPCMBuffer(pcmFormat: inputFormat, frameCapacity: 8_192)!
+        guard let renderBuffer = AVAudioPCMBuffer(
+            pcmFormat: inputFormat,
+            frameCapacity: Self.chunkFrameCapacity
+        ) else {
+            throw RecorderError.couldNotStart
+        }
+        self.renderBuffer = renderBuffer
+        chunkPool = try AudioCaptureBufferPool(
+            inputFormat: inputFormat,
+            frameCapacity: Self.chunkFrameCapacity,
+            count: Self.pooledChunkCount
+        )
+        state = Mutex(State())
+    }
+
+    func startCapture(writer: AudioCaptureWriter) throws {
+        guard let chunk = chunkPool.checkout() else {
+            throw RecorderError.couldNotStart
+        }
+        let didStart = state.withLock { state in
+            guard state.writer == nil, state.activeChunk == nil else { return false }
+            state.writer = writer
+            state.activeChunk = chunk
+            return true
+        }
+        if !didStart {
+            chunkPool.checkin(chunk)
+            throw RecorderError.couldNotStart
+        }
+    }
+
+    func pauseCapture() {
+        flushActiveChunk()
+    }
+
+    func discardCapture() {
+        let activeChunk = state.withLock { state -> AudioCaptureBuffer? in
+            state.writer = nil
+            defer { state.activeChunk = nil }
+            return state.activeChunk
+        }
+        if let activeChunk {
+            chunkPool.checkin(activeChunk)
+        }
     }
 
     func render(
@@ -469,32 +522,159 @@ private final class HALInputCaptureContext: @unchecked Sendable {
         busNumber: UInt32,
         frameCount: UInt32
     ) -> OSStatus {
-        guard let writer else { return noErr }
-        if inputBuffer.frameCapacity < frameCount {
-            guard let replacement = AVAudioPCMBuffer(
-                pcmFormat: inputFormat,
-                frameCapacity: frameCount
-            ) else {
+        state.withLock { state in
+            guard let writer = state.writer, let activeChunk = state.activeChunk else {
+                return noErr
+            }
+            let activeBuffer = activeChunk.buffer
+            guard renderBuffer.frameCapacity >= frameCount else {
+                writer.markFailed()
                 return kAudio_ParamError
             }
-            inputBuffer = replacement
-        }
 
-        // AVAudioPCMBuffer derives each AudioBuffer's mDataByteSize from its
-        // frameLength. AudioUnitRender needs the writable byte capacity, not
-        // an empty buffer, otherwise it rejects the callback with -50.
-        inputBuffer.frameLength = frameCount
-        let status = AudioUnitRender(
-            audioUnit,
-            actionFlags,
-            timeStamp,
-            busNumber,
-            frameCount,
-            inputBuffer.mutableAudioBufferList
-        )
-        guard status == noErr else { return status }
-        writer.append(inputBuffer)
-        return noErr
+            // AVAudioPCMBuffer derives each AudioBuffer's mDataByteSize from
+            // frameLength. AudioUnitRender needs the writable byte capacity,
+            // not an empty buffer, otherwise it rejects the callback with -50.
+            renderBuffer.frameLength = frameCount
+            let status = AudioUnitRender(
+                audioUnit,
+                actionFlags,
+                timeStamp,
+                busNumber,
+                frameCount,
+                renderBuffer.mutableAudioBufferList
+            )
+            guard status == noErr else { return status }
+
+            guard copy(renderBuffer, into: activeBuffer, frameCount: frameCount) else {
+                writer.markFailed()
+                return noErr
+            }
+            guard activeBuffer.frameLength == activeBuffer.frameCapacity else {
+                return noErr
+            }
+            guard let nextChunk = chunkPool.checkout() else {
+                writer.markFailed()
+                state.writer = nil
+                state.activeChunk = nil
+                chunkPool.checkin(activeChunk)
+                return noErr
+            }
+
+            state.activeChunk = nextChunk
+            enqueue(activeChunk, with: writer)
+            return noErr
+        }
+    }
+
+    private func flushActiveChunk() {
+        let pending = state.withLock { state -> (AudioCaptureWriter, AudioCaptureBuffer)? in
+            guard let writer = state.writer else { return nil }
+            state.writer = nil
+            guard let activeChunk = state.activeChunk else { return nil }
+            state.activeChunk = nil
+            guard activeChunk.buffer.frameLength > 0 else {
+                chunkPool.checkin(activeChunk)
+                return nil
+            }
+            return (writer, activeChunk)
+        }
+        guard let pending else { return }
+        enqueue(pending.1, with: pending.0)
+    }
+
+    private func enqueue(_ chunk: AudioCaptureBuffer, with writer: AudioCaptureWriter) {
+        writer.enqueue(AudioCaptureBufferLease(
+            buffer: chunk,
+            pool: chunkPool
+        ))
+    }
+
+    private func copy(
+        _ source: AVAudioPCMBuffer,
+        into destination: AVAudioPCMBuffer,
+        frameCount: AVAudioFrameCount
+    ) -> Bool {
+        let destinationOffset = destination.frameLength
+        guard destination.frameCapacity - destinationOffset >= frameCount,
+              let sourceChannels = source.floatChannelData,
+              let destinationChannels = destination.floatChannelData,
+              source.format.channelCount == destination.format.channelCount else {
+            return false
+        }
+        let byteCount = Int(frameCount) * MemoryLayout<Float>.stride
+        for channel in 0..<Int(source.format.channelCount) {
+            memcpy(
+                destinationChannels[channel].advanced(by: Int(destinationOffset)),
+                sourceChannels[channel],
+                byteCount
+            )
+        }
+        destination.frameLength = destinationOffset + frameCount
+        return true
+    }
+}
+
+/// Wraps an AVAudioPCMBuffer while a single owner has exclusive access to it.
+private final class AudioCaptureBuffer: @unchecked Sendable {
+    let buffer: AVAudioPCMBuffer
+
+    init(_ buffer: AVAudioPCMBuffer) {
+        self.buffer = buffer
+    }
+}
+
+/// A bounded pool keeps the realtime callback allocation-free. Each checked
+/// out buffer is exclusively owned by either the callback or the writer queue.
+private final class AudioCaptureBufferPool: @unchecked Sendable {
+    private struct State {
+        var available: [AudioCaptureBuffer]
+    }
+
+    private let state: Mutex<State>
+
+    init(
+        inputFormat: AVAudioFormat,
+        frameCapacity: AVAudioFrameCount,
+        count: Int
+    ) throws {
+        var buffers: [AudioCaptureBuffer] = []
+        buffers.reserveCapacity(count)
+        for _ in 0..<count {
+            guard let buffer = AVAudioPCMBuffer(
+                pcmFormat: inputFormat,
+                frameCapacity: frameCapacity
+            ) else {
+                throw RecorderError.couldNotStart
+            }
+            buffers.append(AudioCaptureBuffer(buffer))
+        }
+        state = Mutex(State(available: buffers))
+    }
+
+    func checkout() -> AudioCaptureBuffer? {
+        state.withLock { $0.available.popLast() }
+    }
+
+    func checkin(_ buffer: AudioCaptureBuffer) {
+        buffer.buffer.frameLength = 0
+        state.withLock { $0.available.append(buffer) }
+    }
+}
+
+/// Holds a pooled non-Sendable AVAudioPCMBuffer while it is exclusively owned
+/// by the serial writer queue.
+fileprivate final class AudioCaptureBufferLease: @unchecked Sendable {
+    let buffer: AudioCaptureBuffer
+    private let pool: AudioCaptureBufferPool
+
+    init(buffer: AudioCaptureBuffer, pool: AudioCaptureBufferPool) {
+        self.buffer = buffer
+        self.pool = pool
+    }
+
+    func recycle() {
+        pool.checkin(buffer)
     }
 }
 
@@ -540,6 +720,11 @@ final class AudioCaptureWriter: Sendable {
     }
 
     private let state: Mutex<State>
+    private let processingQueue = DispatchQueue(
+        label: "com.d9beuD.Entrevoix.audio-capture-writer",
+        qos: .userInitiated
+    )
+    private let pendingWrites = DispatchGroup()
 
     init(inputFormat: AVAudioFormat, outputURL: URL) throws {
         guard let converterInputFormat = AVAudioFormat(
@@ -572,6 +757,21 @@ final class AudioCaptureWriter: Sendable {
 
     var averagePower: Float {
         state.withLock { $0.averagePower }
+    }
+
+    /// Called from the realtime callback only after it has filled a pooled
+    /// chunk. Conversion and disk I/O then run on this dedicated serial queue.
+    fileprivate func enqueue(_ lease: AudioCaptureBufferLease) {
+        pendingWrites.enter()
+        processingQueue.async { [self] in
+            append(lease.buffer.buffer)
+            lease.recycle()
+            pendingWrites.leave()
+        }
+    }
+
+    func markFailed() {
+        state.withLock { $0.didFail = true }
     }
 
     func append(_ input: AVAudioPCMBuffer) {
@@ -618,7 +818,10 @@ final class AudioCaptureWriter: Sendable {
     }
 
     func finish() -> Result {
-        state.withLock { state in
+        // `HALInputCaptureContext.pauseCapture()` stops new enqueue operations
+        // before this waits, so no work can enter the group after the wait.
+        pendingWrites.wait()
+        return state.withLock { state -> Result in
             guard !state.isFinished else {
                 return state.didFail ? .failed : (state.didWriteFrames ? .success : .empty)
             }
