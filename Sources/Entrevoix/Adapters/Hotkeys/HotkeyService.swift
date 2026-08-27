@@ -50,33 +50,26 @@ final class HotkeyService: HotkeyHandling {
         guard !isInstalled else { return }
         isInstalled = true
 
+        // KeyboardShortcuts invokes these handlers synchronously from Carbon's
+        // main event dispatcher. Keep them synchronous: scheduling a main-actor
+        // Task here can crash while Swift checks the current executor.
         KeyboardShortcuts.onKeyDown(for: .dictation) { [weak self] in
-            Task { @MainActor in
-                self?.handleDictationKeyDown(.primary)
-            }
+            self?.handleDictationKeyDown(.primary)
         }
 
         KeyboardShortcuts.onKeyUp(for: .dictation) { [weak self] in
-            Task { @MainActor in
-                self?.handleDictationKeyUp(.primary)
-            }
+            self?.handleDictationKeyUp(.primary)
         }
 
         KeyboardShortcuts.onKeyDown(for: .dictationSecondary) { [weak self] in
-            Task { @MainActor in
-                self?.handleDictationKeyDown(.secondary)
-            }
+            self?.handleDictationKeyDown(.secondary)
         }
 
         KeyboardShortcuts.onKeyUp(for: .dictationSecondary) { [weak self] in
-            Task { @MainActor in
-                self?.handleDictationKeyUp(.secondary)
-            }
+            self?.handleDictationKeyUp(.secondary)
         }
         KeyboardShortcuts.onKeyDown(for: .cancel) { [weak self] in
-            Task { @MainActor in
-                self?.onEscape?()
-            }
+            self?.onEscape?()
         }
     }
 
