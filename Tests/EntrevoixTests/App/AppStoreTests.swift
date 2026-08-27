@@ -688,6 +688,29 @@ final class AppStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testRequestsUnresolvedPermissionsAtLaunch() async {
+        let context = makeContext()
+
+        context.model.requestUnresolvedPermissionsAtLaunch()
+        await appWaitUntil("startup microphone permission request") {
+            context.permissions.microphoneRequestCount == 1
+        }
+        XCTAssertEqual(context.permissions.accessibilityRequestCount, 1)
+
+        context.permissions.microphonePermission = .granted
+        context.permissions.accessibilityPermission = .granted
+        context.model.requestUnresolvedPermissionsAtLaunch()
+        await Task.yield()
+        XCTAssertEqual(context.permissions.microphoneRequestCount, 1)
+        XCTAssertEqual(context.permissions.accessibilityRequestCount, 1)
+
+        context.permissions.microphonePermission = .denied
+        context.model.requestUnresolvedPermissionsAtLaunch()
+        await Task.yield()
+        XCTAssertEqual(context.permissions.microphoneRequestCount, 1)
+    }
+
+    @MainActor
     func testMicrophonePermissionRepairIsSingleFlightAndRefreshesOnSuccess() async {
         let context = makeContext()
         context.permissions.microphonePermission = .denied

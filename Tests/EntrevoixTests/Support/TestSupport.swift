@@ -350,11 +350,13 @@ final class PermissionSpy: PermissionProviding {
     var microphoneResult = true
     var holdMicrophoneRequest = false
     var microphoneResetError: MicrophonePermissionResetError?
+    private(set) var microphoneRequestCount = 0
     private(set) var microphoneResetCount = 0
     private var microphoneContinuations: [CheckedContinuation<Bool, Never>] = []
     private(set) var accessibilityRequestCount = 0
 
     func requestMicrophonePermission() async -> Bool {
+        microphoneRequestCount += 1
         if holdMicrophoneRequest {
             return await withCheckedContinuation { microphoneContinuations.append($0) }
         }
