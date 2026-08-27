@@ -13,11 +13,7 @@ protocol AudioLevelProviding: AnyObject {
 /// Records microphone sessions into the application's fixed PCM WAV format.
 @MainActor
 final class AudioRecorder: AudioRecording, AudioLevelProviding {
-    private struct CaptureEngineKey: Hashable {
-        let input: AudioInputSelection
-    }
-
-    private var cachedEngines: [CaptureEngineKey: any AudioCaptureEngine] = [:]
+    private var preparedEngine: (input: AudioInputSelection, engine: any AudioCaptureEngine)?
     private var activeEngine: (any AudioCaptureEngine)?
     private var captureWriter: AudioCaptureWriter?
     private(set) var currentURL: URL?
@@ -49,38 +45,26 @@ final class AudioRecorder: AudioRecording, AudioLevelProviding {
             .appendingPathExtension("wav")
         switch input {
         case .systemDefault:
-            try startCapture(
-                at: url,
-                key: CaptureEngineKey(input: .systemDefault)
-            )
+            try startCapture(at: url, input: .systemDefault)
             return .requestedInput
         case .device(let device):
-            do {
-                try startCapture(
-                    at: url,
-                    key: CaptureEngineKey(input: .device(device))
-                )
-                return .requestedInput
-            } catch {
-                try? FileManager.default.removeItem(at: url)
-                try startCapture(
-                    at: url,
-                    key: CaptureEngineKey(input: .systemDefault)
-                )
-                return .fellBackToSystemDefault
-            }
+            // An explicit choice must not silently open the macOS default
+            // input. That default can be a Bluetooth headset, which switches
+            // its output into the low-quality conversational profile.
+            try startCapture(at: url, input: .device(device))
+            return .requestedInput
         }
     }
 
     private func startCapture(
         at url: URL,
-        key: CaptureEngineKey
+        input: AudioInputSelection
     ) throws {
-        let engine = try captureEngine(for: key)
+        let engine = try captureEngine(for: input)
         let inputFormat = engine.inputFormat
         guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
             engine.discard()
-            cachedEngines[key] = nil
+            preparedEngine = nil
             throw RecorderError.couldNotStart
         }
 
@@ -92,21 +76,27 @@ final class AudioRecorder: AudioRecording, AudioLevelProviding {
             currentURL = url
         } catch {
             engine.discard()
-            cachedEngines[key] = nil
+            preparedEngine = nil
             try? FileManager.default.removeItem(at: url)
             throw error
         }
     }
 
-    private func captureEngine(for key: CaptureEngineKey) throws -> any AudioCaptureEngine {
-        if let existing = cachedEngines[key] {
-            return existing
+    /// Keep only the selected input's prepared engine to avoid startup latency.
+    /// Discarding the previous selection prevents a paused Bluetooth input from
+    /// retaining its hands-free profile after the user switches microphones.
+    private func captureEngine(for input: AudioInputSelection) throws -> any AudioCaptureEngine {
+        if let preparedEngine, preparedEngine.input == input {
+            return preparedEngine.engine
         }
+
+        preparedEngine?.engine.discard()
+        preparedEngine = nil
 
         let engine = captureEngineFactory.makeCaptureEngine()
         do {
-            try engine.configure(input: key.input)
-            cachedEngines[key] = engine
+            try engine.configure(input: input)
+            preparedEngine = (input, engine)
             return engine
         } catch {
             engine.discard()
@@ -167,7 +157,7 @@ final class AudioRecorder: AudioRecording, AudioLevelProviding {
     }
 }
 
-/// A narrow internal seam around AVAudioEngine that keeps lifecycle tests
+/// A narrow internal seam around microphone capture that keeps lifecycle tests
 /// deterministic without introducing an application-layer port.
 @MainActor
 protocol AudioCaptureEngine: AnyObject {
@@ -193,65 +183,85 @@ final class LiveAudioCaptureEngineFactory: AudioCaptureEngineFactory {
 
 @MainActor
 final class LiveAudioCaptureEngine: AudioCaptureEngine {
-    private let engine = AVAudioEngine()
-    private let inputNode: AVAudioInputNode
-    private var hasInstalledTap = false
-
-    init() {
-        inputNode = engine.inputNode
-    }
+    private var audioUnit: AudioUnit?
+    private var callbackContext: HALInputCaptureContext?
+    private var configuredInputFormat: AVAudioFormat?
+    private var isInitialized = false
 
     var inputFormat: AVAudioFormat {
-        inputNode.outputFormat(forBus: 0)
+        configuredInputFormat ?? AVAudioFormat()
     }
 
+    /// Configures an input-only AUHAL instance.  In particular, output is
+    /// explicitly disabled before a device is attached: AVAudioEngine's input
+    /// node is duplex by default and can otherwise make Core Audio aggregate
+    /// the selected microphone with the AirPods output device.
     func configure(input: AudioInputSelection) throws {
-        guard case .device(let device) = input else { return }
-        guard let deviceID = Self.deviceID(forUID: device.uid) else {
-            throw RecorderError.inputDeviceUnavailable
-        }
-        guard let audioUnit = inputNode.audioUnit else {
-            throw RecorderError.couldNotStart
+        discard()
+
+        let deviceID: AudioDeviceID
+        switch input {
+        case .systemDefault:
+            guard let defaultDeviceID = Self.defaultInputDeviceID() else {
+                throw RecorderError.inputDeviceUnavailable
+            }
+            deviceID = defaultDeviceID
+        case .device(let device):
+            guard let selectedDeviceID = Self.deviceID(forUID: device.uid) else {
+                throw RecorderError.inputDeviceUnavailable
+            }
+            deviceID = selectedDeviceID
         }
 
-        var mutableDeviceID = deviceID
-        let status = AudioUnitSetProperty(
-            audioUnit,
-            kAudioOutputUnitProperty_CurrentDevice,
-            kAudioUnitScope_Global,
-            0,
-            &mutableDeviceID,
-            UInt32(MemoryLayout<AudioDeviceID>.size)
-        )
-        guard status == noErr else { throw RecorderError.audioDevice(status) }
-    }
-
-    func startCapture(writer: AudioCaptureWriter) throws {
-        inputNode.installTap(
-            onBus: 0,
-            bufferSize: 8_192,
-            format: inputFormat,
-            block: Self.makeCaptureTap(writer: writer)
-        )
-        hasInstalledTap = true
+        let audioUnit = try Self.makeInputOnlyAudioUnit()
         do {
-            engine.prepare()
-            try engine.start()
+            try Self.setCurrentDevice(deviceID, on: audioUnit)
+            let inputFormat = try Self.configureClientFormat(on: audioUnit)
+            let context = HALInputCaptureContext(inputFormat: inputFormat, audioUnit: audioUnit)
+            try Self.installInputCallback(context, on: audioUnit)
+            try Self.initialize(audioUnit)
+
+            self.audioUnit = audioUnit
+            callbackContext = context
+            configuredInputFormat = inputFormat
+            isInitialized = true
         } catch {
-            removeTap()
-            engine.stop()
+            AudioComponentInstanceDispose(audioUnit)
             throw error
         }
     }
 
+    func startCapture(writer: AudioCaptureWriter) throws {
+        guard let audioUnit, let callbackContext, isInitialized else {
+            throw RecorderError.couldNotStart
+        }
+
+        callbackContext.writer = writer
+        let status = AudioOutputUnitStart(audioUnit)
+        guard status == noErr else {
+            callbackContext.writer = nil
+            throw RecorderError.audioDevice(status)
+        }
+    }
+
     func pauseCapture() {
-        engine.pause()
-        removeTap()
+        guard let audioUnit else { return }
+        _ = AudioOutputUnitStop(audioUnit)
+        callbackContext?.writer = nil
     }
 
     func discard() {
-        engine.stop()
-        removeTap()
+        guard let audioUnit else { return }
+        _ = AudioOutputUnitStop(audioUnit)
+        callbackContext?.writer = nil
+        if isInitialized {
+            _ = AudioUnitUninitialize(audioUnit)
+        }
+        _ = AudioComponentInstanceDispose(audioUnit)
+        self.audioUnit = nil
+        callbackContext = nil
+        configuredInputFormat = nil
+        isInitialized = false
     }
 
     /// AVAudioEngine invokes taps on a realtime queue, so the block must not
@@ -264,10 +274,143 @@ final class LiveAudioCaptureEngine: AudioCaptureEngine {
         }
     }
 
-    private func removeTap() {
-        guard hasInstalledTap else { return }
-        inputNode.removeTap(onBus: 0)
-        hasInstalledTap = false
+    private nonisolated static func makeInputOnlyAudioUnit() throws -> AudioUnit {
+        var description = AudioComponentDescription(
+            componentType: kAudioUnitType_Output,
+            componentSubType: kAudioUnitSubType_HALOutput,
+            componentManufacturer: kAudioUnitManufacturer_Apple,
+            componentFlags: 0,
+            componentFlagsMask: 0
+        )
+        guard let component = AudioComponentFindNext(nil, &description) else {
+            throw RecorderError.couldNotStart
+        }
+
+        var audioUnit: AudioUnit?
+        let creationStatus = AudioComponentInstanceNew(component, &audioUnit)
+        guard creationStatus == noErr, let audioUnit else {
+            throw RecorderError.audioDevice(creationStatus)
+        }
+
+        do {
+            var enabled: UInt32 = 1
+            try check(AudioUnitSetProperty(
+                audioUnit,
+                kAudioOutputUnitProperty_EnableIO,
+                kAudioUnitScope_Input,
+                1,
+                &enabled,
+                UInt32(MemoryLayout<UInt32>.size)
+            ))
+
+            var disabled: UInt32 = 0
+            try check(AudioUnitSetProperty(
+                audioUnit,
+                kAudioOutputUnitProperty_EnableIO,
+                kAudioUnitScope_Output,
+                0,
+                &disabled,
+                UInt32(MemoryLayout<UInt32>.size)
+            ))
+            return audioUnit
+        } catch {
+            AudioComponentInstanceDispose(audioUnit)
+            throw error
+        }
+    }
+
+    private nonisolated static func setCurrentDevice(
+        _ deviceID: AudioDeviceID,
+        on audioUnit: AudioUnit
+    ) throws {
+        var mutableDeviceID = deviceID
+        try check(AudioUnitSetProperty(
+            audioUnit,
+            kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global,
+            0,
+            &mutableDeviceID,
+            UInt32(MemoryLayout<AudioDeviceID>.size)
+        ))
+    }
+
+    private nonisolated static func configureClientFormat(on audioUnit: AudioUnit) throws -> AVAudioFormat {
+        var deviceFormat = AudioStreamBasicDescription()
+        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        try check(AudioUnitGetProperty(
+            audioUnit,
+            kAudioUnitProperty_StreamFormat,
+            kAudioUnitScope_Input,
+            1,
+            &deviceFormat,
+            &size
+        ))
+        guard deviceFormat.mSampleRate > 0, deviceFormat.mChannelsPerFrame > 0,
+              let format = AVAudioFormat(
+                  commonFormat: .pcmFormatFloat32,
+                  sampleRate: deviceFormat.mSampleRate,
+                  channels: deviceFormat.mChannelsPerFrame,
+                  interleaved: false
+              ) else {
+            throw RecorderError.couldNotStart
+        }
+
+        var clientDescription = format.streamDescription.pointee
+        try check(AudioUnitSetProperty(
+            audioUnit,
+            kAudioUnitProperty_StreamFormat,
+            kAudioUnitScope_Output,
+            1,
+            &clientDescription,
+            UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        ))
+        return format
+    }
+
+    private nonisolated static func installInputCallback(
+        _ context: HALInputCaptureContext,
+        on audioUnit: AudioUnit
+    ) throws {
+        var callback = AURenderCallbackStruct(
+            inputProc: halInputCallback,
+            inputProcRefCon: Unmanaged.passUnretained(context).toOpaque()
+        )
+        try check(AudioUnitSetProperty(
+            audioUnit,
+            kAudioOutputUnitProperty_SetInputCallback,
+            kAudioUnitScope_Global,
+            0,
+            &callback,
+            UInt32(MemoryLayout<AURenderCallbackStruct>.size)
+        ))
+    }
+
+    private nonisolated static func initialize(_ audioUnit: AudioUnit) throws {
+        try check(AudioUnitInitialize(audioUnit))
+    }
+
+    private nonisolated static func check(_ status: OSStatus) throws {
+        guard status == noErr else { throw RecorderError.audioDevice(status) }
+    }
+
+    private nonisolated static func defaultInputDeviceID() -> AudioDeviceID? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var deviceID = kAudioObjectUnknown
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        let status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            0,
+            nil,
+            &size,
+            &deviceID
+        )
+        guard status == noErr, deviceID != kAudioObjectUnknown else { return nil }
+        return deviceID
     }
 
     private nonisolated static func deviceID(forUID uid: String) -> AudioDeviceID? {
@@ -276,22 +419,103 @@ final class LiveAudioCaptureEngine: AudioCaptureEngine {
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        let value = uid as CFString
+        var deviceUID = uid as CFString
         var deviceID = kAudioObjectUnknown
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-        let status = withUnsafePointer(to: value) { pointer in
-            AudioObjectGetPropertyData(
-                AudioObjectID(kAudioObjectSystemObject),
-                &address,
-                UInt32(MemoryLayout<CFString>.size),
-                pointer,
-                &size,
-                &deviceID
-            )
+        let status = withUnsafePointer(to: &deviceUID) { deviceUIDPointer in
+            withUnsafeMutablePointer(to: &deviceID) { deviceIDPointer in
+                var translation = AudioValueTranslation(
+                    mInputData: UnsafeMutableRawPointer(mutating: deviceUIDPointer),
+                    mInputDataSize: UInt32(MemoryLayout<CFString>.size),
+                    mOutputData: deviceIDPointer,
+                    mOutputDataSize: UInt32(MemoryLayout<AudioDeviceID>.size)
+                )
+                size = UInt32(MemoryLayout<AudioValueTranslation>.size)
+                return AudioObjectGetPropertyData(
+                    AudioObjectID(kAudioObjectSystemObject),
+                    &address,
+                    0,
+                    nil,
+                    &size,
+                    &translation
+                )
+            }
         }
         guard status == noErr, deviceID != kAudioObjectUnknown else { return nil }
         return deviceID
     }
+}
+
+/// The AUHAL input callback is serialized by Core Audio. The recorder changes
+/// `writer` only after `AudioOutputUnitStop` has returned, so this object can
+/// avoid hopping to the main actor for every audio buffer.
+private final class HALInputCaptureContext: @unchecked Sendable {
+    private let inputFormat: AVAudioFormat
+    private let audioUnit: AudioUnit
+    private var inputBuffer: AVAudioPCMBuffer
+    var writer: AudioCaptureWriter?
+
+    init(inputFormat: AVAudioFormat, audioUnit: AudioUnit) {
+        self.inputFormat = inputFormat
+        self.audioUnit = audioUnit
+        // 8,192 frames covers the usual Core Audio callback size while keeping
+        // the realtime path allocation-free in normal operation.
+        inputBuffer = AVAudioPCMBuffer(pcmFormat: inputFormat, frameCapacity: 8_192)!
+    }
+
+    func render(
+        actionFlags: UnsafeMutablePointer<AudioUnitRenderActionFlags>,
+        timeStamp: UnsafePointer<AudioTimeStamp>,
+        busNumber: UInt32,
+        frameCount: UInt32
+    ) -> OSStatus {
+        guard let writer else { return noErr }
+        if inputBuffer.frameCapacity < frameCount {
+            guard let replacement = AVAudioPCMBuffer(
+                pcmFormat: inputFormat,
+                frameCapacity: frameCount
+            ) else {
+                return kAudio_ParamError
+            }
+            inputBuffer = replacement
+        }
+
+        // AVAudioPCMBuffer derives each AudioBuffer's mDataByteSize from its
+        // frameLength. AudioUnitRender needs the writable byte capacity, not
+        // an empty buffer, otherwise it rejects the callback with -50.
+        inputBuffer.frameLength = frameCount
+        let status = AudioUnitRender(
+            audioUnit,
+            actionFlags,
+            timeStamp,
+            busNumber,
+            frameCount,
+            inputBuffer.mutableAudioBufferList
+        )
+        guard status == noErr else { return status }
+        writer.append(inputBuffer)
+        return noErr
+    }
+}
+
+/// The callback runs on Core Audio's realtime thread. Its context is held by
+/// the engine for the whole initialized lifetime, and stopping the unit
+/// synchronously precedes changing its writer.
+private func halInputCallback(
+    _ refCon: UnsafeMutableRawPointer,
+    _ actionFlags: UnsafeMutablePointer<AudioUnitRenderActionFlags>,
+    _ timeStamp: UnsafePointer<AudioTimeStamp>,
+    _ busNumber: UInt32,
+    _ frameCount: UInt32,
+    _: UnsafeMutablePointer<AudioBufferList>?
+) -> OSStatus {
+    let context = Unmanaged<HALInputCaptureContext>.fromOpaque(refCon).takeUnretainedValue()
+    return context.render(
+        actionFlags: actionFlags,
+        timeStamp: timeStamp,
+        busNumber: busNumber,
+        frameCount: frameCount
+    )
 }
 
 /// Synchronizes the realtime engine callback with the main-actor lifecycle.

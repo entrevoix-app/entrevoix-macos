@@ -40,7 +40,7 @@ final class AudioRecorderTests: XCTestCase {
         )
     }
 
-    func testCaptureEngineIsReusedWithoutVoiceProcessing() throws {
+    func testCaptureEngineIsReusedForRepeatedCapturesOnTheSameInput() throws {
         let engine = AudioCaptureEngineSpy()
         let factory = AudioCaptureEngineFactorySpy(engines: [engine])
         let recorder = AudioRecorder(logger: AppLogStore(), captureEngineFactory: factory)
@@ -69,27 +69,23 @@ final class AudioRecorderTests: XCTestCase {
         recorder.cancel()
         XCTAssertEqual(factory.makeCount, 2)
         XCTAssertEqual(systemEngine.configuredInputs, [.systemDefault])
+        XCTAssertEqual(systemEngine.discardCount, 1)
         XCTAssertEqual(selectedEngine.configuredInputs, [.device(selectedInput)])
     }
 
-    func testUnavailableSelectedInputDiscardsItsEngineAndFallsBackToSystemDefault() throws {
+    func testUnavailableSelectedInputDiscardsItsEngineWithoutFallingBackToSystemDefault() throws {
         let unavailableEngine = AudioCaptureEngineSpy(configureError: AppStubError.failure)
-        let fallbackEngine = AudioCaptureEngineSpy()
-        let factory = AudioCaptureEngineFactorySpy(engines: [unavailableEngine, fallbackEngine])
+        let factory = AudioCaptureEngineFactorySpy(engines: [unavailableEngine])
         let recorder = AudioRecorder(logger: AppLogStore(), captureEngineFactory: factory)
         let selectedInput = AudioInputDeviceReference(uid: "missing-device", name: "Missing microphone")
 
-        let result = try recorder.start(input: .device(selectedInput))
-        recorder.cancel()
+        XCTAssertThrowsError(try recorder.start(input: .device(selectedInput)))
 
-        XCTAssertEqual(result, .fellBackToSystemDefault)
         XCTAssertEqual(unavailableEngine.configuredInputs, [.device(selectedInput)])
         XCTAssertEqual(unavailableEngine.discardCount, 1)
-        XCTAssertEqual(fallbackEngine.configuredInputs, [.systemDefault])
-        XCTAssertEqual(fallbackEngine.startCaptureCount, 1)
     }
 
-    func testFailedCaptureEvictsTheCachedEngineBeforeRetrying() throws {
+    func testFailedCaptureDiscardsItsEngineBeforeRetrying() throws {
         let failedEngine = AudioCaptureEngineSpy(startCaptureError: AppStubError.failure)
         let replacementEngine = AudioCaptureEngineSpy()
         let factory = AudioCaptureEngineFactorySpy(engines: [failedEngine, replacementEngine])
