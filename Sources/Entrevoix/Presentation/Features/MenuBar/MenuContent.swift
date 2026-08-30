@@ -44,6 +44,45 @@ struct MenuContent: View {
             }
         }
 
+        Menu(EntrevoixLocalization.text("field.audio_input", defaultValue: "Microphone", locale: locale)) {
+            Button {
+                model.audioInput.setSelection(.systemDefault)
+            } label: {
+                audioInputMenuLabel(
+                    systemDefaultInputTitle(locale: locale),
+                    selection: .systemDefault,
+                    locale: locale
+                )
+            }
+
+            if !model.audioInput.devices.isEmpty {
+                Divider()
+                ForEach(model.audioInput.devices) { device in
+                    Button {
+                        model.audioInput.setSelection(.device(device))
+                    } label: {
+                        audioInputMenuLabel(
+                            device.name,
+                            selection: .device(device),
+                            locale: locale
+                        )
+                    }
+                }
+            }
+
+            if let unavailableDevice = model.audioInput.unavailableSelection {
+                Divider()
+                Button {} label: {
+                    audioInputMenuLabel(
+                        unavailableInputTitle(unavailableDevice.name, locale: locale),
+                        selection: .device(unavailableDevice),
+                        locale: locale
+                    )
+                }
+                .disabled(true)
+            }
+        }
+
         Menu(EntrevoixLocalization.text("menu.prompt", defaultValue: "Prompt", locale: locale)) {
             Section(EntrevoixLocalization.text("menu.prompts_group", defaultValue: "Prompts", locale: locale)) {
                 if model.preferences.cleanupPrompts.isEmpty {
@@ -119,6 +158,46 @@ struct MenuContent: View {
         Button(EntrevoixLocalization.text("menu.quit", defaultValue: "Quit", locale: locale)) {
             NSApplication.shared.terminate(nil)
         }
+    }
+
+    private func audioInputMenuLabel(
+        _ title: String,
+        selection: AudioInputSelection,
+        locale: Locale
+    ) -> some View {
+        HStack {
+            Text(title)
+            if model.audioInput.selection == selection {
+                Spacer()
+                Image(systemName: "checkmark")
+                    .accessibilityLabel(EntrevoixLocalization.text("accessibility.selected", defaultValue: "Selected", locale: locale))
+            }
+        }
+    }
+
+    private func systemDefaultInputTitle(locale: Locale) -> String {
+        guard let device = model.audioInput.defaultDevice else {
+            return EntrevoixLocalization.text(
+                "audio_input.system_default",
+                defaultValue: "macOS Default Microphone",
+                locale: locale
+            )
+        }
+        let format = EntrevoixLocalization.text(
+            "audio_input.system_default_named",
+            defaultValue: "macOS Default Microphone (%@)",
+            locale: locale
+        )
+        return String(format: format, locale: locale, arguments: [device.name])
+    }
+
+    private func unavailableInputTitle(_ name: String, locale: Locale) -> String {
+        let format = EntrevoixLocalization.text(
+            "audio_input.unavailable",
+            defaultValue: "%@ (Unavailable)",
+            locale: locale
+        )
+        return String(format: format, locale: locale, arguments: [name])
     }
 
     private func languageMenuLabel(_ language: TranscriptionLanguage, locale: Locale, isSelected: Bool) -> some View {
