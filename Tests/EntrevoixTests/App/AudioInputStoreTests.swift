@@ -27,6 +27,26 @@ final class AudioInputStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testSelectingSystemDefaultPersistsImmediately() {
+        let selected = AudioInputDeviceReference(uid: "external", name: "Studio Microphone")
+        let persistence = PreferencesStoreSpy()
+        let preferences = PreferencesStore(
+            preferencesStore: persistence,
+            keychain: SecretStoreSpy(),
+            initialPreferences: AppPreferences(audioInputSelection: .device(selected))
+        )
+        let model = AudioInputStore(
+            preferencesStore: preferences,
+            deviceCatalog: AudioInputDeviceCatalogSpy()
+        )
+
+        model.setSelection(.systemDefault)
+
+        XCTAssertEqual(model.selection, .systemDefault)
+        XCTAssertEqual(persistence.saved.last?.audioInputSelection, .systemDefault)
+    }
+
+    @MainActor
     func testMissingSelectionIsRetainedAndClearsWhenDeviceReconnects() {
         let selected = AudioInputDeviceReference(uid: "external", name: "Studio Microphone")
         let catalog = AudioInputDeviceCatalogSpy(snapshot: .init(devices: [], defaultDeviceUID: nil))
