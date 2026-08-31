@@ -40,6 +40,23 @@ final class LocalizationTests: XCTestCase {
         )
     }
 
+    func testOnboardingPrivacyUsesTruthfulRetentionCopy() throws {
+        let data = try XCTUnwrap(EntrevoixLocalization.sourceCatalogData())
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try XCTUnwrap(object["strings"] as? [String: Any])
+        let entry = try XCTUnwrap(strings["onboarding.welcome.privacy"] as? [String: Any])
+        let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any])
+
+        XCTAssertEqual(
+            try localizedValue(for: "en", in: localizations),
+            "API keys stay in the macOS Keychain. Audio recordings are deleted after transcription by default, but you can choose to retain them. Entrevoix has no servers or user accounts of its own."
+        )
+        XCTAssertEqual(
+            try localizedValue(for: "fr-FR", in: localizations),
+            "Les clés API restent dans le trousseau macOS. Les enregistrements audio sont supprimés après la transcription par défaut, mais vous pouvez choisir de les conserver. Entrevoix n’a ni serveur ni compte utilisateur propre."
+        )
+    }
+
     func testMarketingVersionReadsBundleValueAndFallsBackSafely() {
         XCTAssertEqual(
             AppVersion.marketingVersion(in: ["CFBundleShortVersionString": "1.2.3"]),
@@ -56,6 +73,10 @@ final class LocalizationTests: XCTestCase {
         for key in [
             "cleanup.default_prompt",
             "menu.settings",
+            "settings.recordings",
+            "settings.delete_audio_after_transcription",
+            "settings.open_recordings_folder",
+            "settings.open_recordings_folder_failed",
             "settings.interface_language",
             "settings.global_shortcut",
             "settings.sidebar.application",

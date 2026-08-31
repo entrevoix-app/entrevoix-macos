@@ -140,6 +140,44 @@ struct GeneralSettingsView: View {
                 }
             }
 
+            Section(EntrevoixLocalization.text("settings.recordings", defaultValue: "Recordings", locale: locale)) {
+                Toggle(
+                    EntrevoixLocalization.text(
+                        "settings.delete_audio_after_transcription",
+                        defaultValue: "Delete audio after transcription",
+                        locale: locale
+                    ),
+                    isOn: Binding(
+                        get: { model.recordingRetention.deleteAudioAfterTranscription },
+                        set: { model.setDeleteAudioAfterTranscription($0) }
+                    )
+                )
+                .toggleStyle(.checkbox)
+
+                Button(action: model.openRecordingsFolder) {
+                    Text(EntrevoixLocalization.text(
+                        "settings.open_recordings_folder",
+                        defaultValue: "Open Recordings Folder",
+                        locale: locale
+                    ))
+                    .foregroundStyle(.tint)
+                    .underline()
+                }
+                .buttonStyle(.plain)
+
+                if model.recordingsFolderOpenFailed {
+                    Label(
+                        EntrevoixLocalization.text(
+                            "settings.open_recordings_folder_failed",
+                            defaultValue: "Could not open recordings folder.",
+                            locale: locale
+                        ),
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .foregroundStyle(.secondary)
+                }
+            }
+
             PermissionsSettings(model: model)
 
             Section(EntrevoixLocalization.text("settings.about", defaultValue: "About", locale: locale)) {

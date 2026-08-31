@@ -9,6 +9,7 @@ final class AppStore {
     let connectionTestStore: ConnectionTestStore
     let audioInput: AudioInputStore
     let preferencesModel: PreferencesStore
+    let recordingRetention: RecordingRetentionStore
     let providerStore: ProviderStore
     let permissionsModel: PermissionsStore
     let promptLibrary: PromptLibraryStore
@@ -16,7 +17,9 @@ final class AppStore {
     private let dictationDictionaryCloudSync: DictationDictionaryCloudSync
     let updates: UpdateStore
     private let launchAtLoginService: any LaunchAtLoginControlling
+    private let recordingsFolderOpener: any RecordingsFolderOpening
     let logStore: AppLogStore
+    private(set) var recordingsFolderOpenFailed = false
 
     var preferences: AppPreferences {
         get { preferencesModel.preferences }
@@ -237,6 +240,8 @@ final class AppStore {
             initialPreferences: initialPreferences
         )
         self.preferencesModel = preferencesModel
+        recordingRetention = dependencies.recordingRetention
+        recordingsFolderOpener = dependencies.recordingsFolderOpener
         self.audioInput = AudioInputStore(
             preferencesStore: preferencesModel,
             deviceCatalog: dependencies.audioInputDevices
@@ -379,6 +384,20 @@ final class AppStore {
         } catch {
             launchAtLoginErrorDetail = error.localizedDescription
             logStore.log("Error: could not change the launch at login setting.")
+        }
+    }
+
+    func setDeleteAudioAfterTranscription(_ enabled: Bool) {
+        recordingRetention.setDeleteAudioAfterTranscription(enabled)
+    }
+
+    func openRecordingsFolder() {
+        do {
+            try recordingsFolderOpener.openRecordingsFolder()
+            recordingsFolderOpenFailed = false
+        } catch {
+            recordingsFolderOpenFailed = true
+            logStore.log("Error: could not open recordings folder.")
         }
     }
 

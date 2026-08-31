@@ -8,6 +8,8 @@ struct AppStoreDependencies {
     let textDelivery: any TextDelivering
     let cleanupPromptExportReader: any CleanupPromptExportReading
     let preferencesStore: any PreferencesStoring
+    let recordingRetention: RecordingRetentionStore
+    let recordingsFolderOpener: any RecordingsFolderOpening
     let keychain: any SecretStoring
     let codexCredentials: any CodexCredentialsStoring & CodexAccessTokenProviding
     let codexAuthenticator: any CodexAuthenticating
@@ -32,6 +34,8 @@ struct AppStoreDependencies {
         textDelivery: any TextDelivering,
         cleanupPromptExportReader: any CleanupPromptExportReading,
         preferencesStore: any PreferencesStoring,
+        recordingRetention: RecordingRetentionStore,
+        recordingsFolderOpener: any RecordingsFolderOpening,
         keychain: any SecretStoring,
         codexCredentials: any CodexCredentialsStoring & CodexAccessTokenProviding = UnavailableCodexCredentialsStore(),
         codexAuthenticator: any CodexAuthenticating = UnavailableCodexAuthenticator(),
@@ -51,7 +55,7 @@ struct AppStoreDependencies {
         now: @escaping () -> Date
     ) {
         self.coordinator = coordinator; self.connectionTest = connectionTest; self.textDelivery = textDelivery; self.cleanupPromptExportReader = cleanupPromptExportReader
-        self.preferencesStore = preferencesStore; self.keychain = keychain; self.codexCredentials = codexCredentials; self.codexAuthenticator = codexAuthenticator; self.modelCatalog = modelCatalog; self.audioCaptureTrimmingResources = audioCaptureTrimmingResources; self.providerAlerts = providerAlerts
+        self.preferencesStore = preferencesStore; self.recordingRetention = recordingRetention; self.recordingsFolderOpener = recordingsFolderOpener; self.keychain = keychain; self.codexCredentials = codexCredentials; self.codexAuthenticator = codexAuthenticator; self.modelCatalog = modelCatalog; self.audioCaptureTrimmingResources = audioCaptureTrimmingResources; self.providerAlerts = providerAlerts
         self.hotkeys = hotkeys; self.launchAtLogin = launchAtLogin; self.feedback = feedback
         self.listeningIndicator = listeningIndicator; self.permissions = permissions; self.audioInputDevices = audioInputDevices; self.updater = updater; self.cleanupLibraryCloudSync = cleanupLibraryCloudSync; self.dictationDictionaryCloudSync = dictationDictionaryCloudSync; self.logStore = logStore
         self.now = now

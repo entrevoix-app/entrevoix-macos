@@ -62,7 +62,7 @@ struct OnboardingView: View {
             Label(EntrevoixLocalization.text("onboarding.welcome.title", defaultValue: "Welcome to Entrevoix", locale: model.interfaceLocale), systemImage: "waveform")
                 .font(.largeTitle.bold())
             Text(EntrevoixLocalization.text("onboarding.welcome.description", defaultValue: "Entrevoix records your voice locally, then sends the short audio file to your chosen STT provider. A second provider can then clean up the text if you enable that option.", locale: model.interfaceLocale))
-            Text(EntrevoixLocalization.text("onboarding.welcome.privacy", defaultValue: "API keys stay in the macOS Keychain. Temporary audio files are deleted after dictation. Entrevoix has no servers or user accounts of its own.", locale: model.interfaceLocale))
+            Text(EntrevoixLocalization.text("onboarding.welcome.privacy", defaultValue: "API keys stay in the macOS Keychain. Audio recordings are deleted after transcription by default, but you can choose to retain them. Entrevoix has no servers or user accounts of its own.", locale: model.interfaceLocale))
                 .foregroundStyle(.secondary)
             Label(EntrevoixLocalization.text("onboarding.welcome.settings_hint", defaultValue: "You can change all of these choices later in Settings.", locale: model.interfaceLocale), systemImage: "gear")
                 .font(.callout)
