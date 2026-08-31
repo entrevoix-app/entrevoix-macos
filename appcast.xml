@@ -3,6 +3,16 @@
     <channel>
         <title>Entrevoix</title>
         <item>
+            <title>0.5.0-rc.4</title>
+            <pubDate>Mon, 31 Aug 2026 14:26:19 +0000</pubDate>
+            <sparkle:channel>rc</sparkle:channel>
+            <sparkle:version>24</sparkle:version>
+            <sparkle:shortVersionString>0.5.0-rc.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/entrevoix-app/entrevoix-macos/releases/download/v0.5.0-rc.4/Entrevoix-0.5.0-rc.4-macos.dmg" length="4735808" type="application/octet-stream" sparkle:edSignature="x6Bfc3Lzk0Gz8fWucy/Px/of+LLexIMc1yuZImef7RvBnMnUttqxmpEAg50k8zehZmqb9e3CJ3hfZnAnlP0gAw=="/>
+        </item>
+        <item>
             <title>0.5.0-rc.3</title>
             <pubDate>Mon, 31 Aug 2026 12:51:08 +0000</pubDate>
             <sparkle:channel>rc</sparkle:channel>
@@ -21,16 +31,6 @@
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <enclosure url="https://github.com/entrevoix-app/entrevoix-macos/releases/download/v0.5.0-rc.2/Entrevoix-0.5.0-rc.2-macos.dmg" length="4701714" type="application/octet-stream" sparkle:edSignature="IGmlGMSHaj+G/tN0uHzWfo+7ntBt91Cilsyfx+ppMqLY+sn9WQInCmArnHGsJW8i80BLJbmUpqiqKky9tSprCg=="/>
-        </item>
-        <item>
-            <title>0.5.0-rc.1</title>
-            <pubDate>Thu, 27 Aug 2026 14:08:28 +0000</pubDate>
-            <sparkle:channel>rc</sparkle:channel>
-            <sparkle:version>21</sparkle:version>
-            <sparkle:shortVersionString>0.5.0-rc.1</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/entrevoix-app/entrevoix-macos/releases/download/v0.5.0-rc.1/Entrevoix-0.5.0-rc.1-macos.dmg" length="4693772" type="application/octet-stream" sparkle:edSignature="7LcfT7q+jVn3i6N5H/Lu9QjbIJQVq2HF5TSrcf3P7stJ1geFbiKiHIFmdOvNxr/nQgHDSXCvdiCUH8id93bdAw=="/>
         </item>
         <item>
             <title>0.5.0-dev.3</title>
