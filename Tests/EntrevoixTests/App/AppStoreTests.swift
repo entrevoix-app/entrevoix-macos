@@ -958,6 +958,178 @@ final class AppStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testRetentionDecoratorArchivesSuccessfulCoordinatorCapture() async throws {
+        let baseRecorder = AppRecorderSpy()
+        let sourceURL = try appTemporaryFile()
+        baseRecorder.stopURL = sourceURL
+        defer {
+            if FileManager.default.fileExists(atPath: sourceURL.path) {
+                try? FileManager.default.removeItem(at: sourceURL)
+            }
+        }
+        let archive = AppRecordingArchiveSpy()
+        let recorder = DictationAudioRetentionRecorder(
+            recorder: baseRecorder,
+            archive: archive,
+            deleteAudioAfterTranscription: { false },
+            logger: AppLogStore()
+        )
+        let context = makeContext(recorder: recorder, transcriber: AppTranscriberSpy())
+
+        context.model.startRecording()
+        await appWaitUntil("recording") { context.model.state == .recording }
+        context.clock.advance(by: 1)
+        context.model.stopRecording()
+        await appWaitUntil("dictation completion") { context.model.state == .idle }
+
+        XCTAssertEqual(archive.sources, [sourceURL])
+        XCTAssertEqual(baseRecorder.deleteCount, 1)
+    }
+
+    @MainActor
+    func testRetentionDecoratorDoesNotArchiveShortCoordinatorCapture() async throws {
+        let baseRecorder = AppRecorderSpy()
+        let sourceURL = try appTemporaryFile()
+        baseRecorder.stopURL = sourceURL
+        defer {
+            if FileManager.default.fileExists(atPath: sourceURL.path) {
+                try? FileManager.default.removeItem(at: sourceURL)
+            }
+        }
+        let archive = AppRecordingArchiveSpy()
+        let recorder = DictationAudioRetentionRecorder(
+            recorder: baseRecorder,
+            archive: archive,
+            deleteAudioAfterTranscription: { false },
+            logger: AppLogStore()
+        )
+        let context = makeContext(recorder: recorder, transcriber: AppTranscriberSpy())
+
+        context.model.startRecording()
+        await appWaitUntil("recording") { context.model.state == .recording }
+        context.model.stopRecording()
+        await appWaitUntil("dictation completion") { context.model.state == .idle }
+
+        XCTAssertTrue(archive.sources.isEmpty)
+        XCTAssertEqual(baseRecorder.cancelCount, 1)
+        XCTAssertEqual(baseRecorder.stopCount, 0)
+    }
+
+    @MainActor
+    func testRetentionDecoratorArchivesCaptureAfterCoordinatorTranscriptionFailure() async throws {
+        let baseRecorder = AppRecorderSpy()
+        let sourceURL = try appTemporaryFile()
+        baseRecorder.stopURL = sourceURL
+        defer {
+            if FileManager.default.fileExists(atPath: sourceURL.path) {
+                try? FileManager.default.removeItem(at: sourceURL)
+            }
+        }
+        let archive = AppRecordingArchiveSpy()
+        let recorder = DictationAudioRetentionRecorder(
+            recorder: baseRecorder,
+            archive: archive,
+            deleteAudioAfterTranscription: { false },
+            logger: AppLogStore()
+        )
+        let context = makeContext(
+            recorder: recorder,
+            transcriber: AppTranscriberSpy(result: .failure(.failure))
+        )
+
+        context.model.startRecording()
+        await appWaitUntil("recording") { context.model.state == .recording }
+        context.clock.advance(by: 1)
+        context.model.stopRecording()
+        await appWaitUntil("terminal state") {
+            context.model.state == .idle || {
+                if case .error = context.model.state { return true }
+                return false
+            }()
+        }
+
+        XCTAssertEqual(archive.sources, [sourceURL])
+        XCTAssertEqual(baseRecorder.deleteCount, 1)
+    }
+
+    @MainActor
+    func testRetentionDecoratorArchivesCaptureAfterPostStopCoordinatorCancellation() async throws {
+        let baseRecorder = AppRecorderSpy()
+        let sourceURL = try appTemporaryFile()
+        baseRecorder.stopURL = sourceURL
+        defer {
+            if FileManager.default.fileExists(atPath: sourceURL.path) {
+                try? FileManager.default.removeItem(at: sourceURL)
+            }
+        }
+        let archive = AppRecordingArchiveSpy()
+        let recorder = DictationAudioRetentionRecorder(
+            recorder: baseRecorder,
+            archive: archive,
+            deleteAudioAfterTranscription: { false },
+            logger: AppLogStore()
+        )
+        let transcriber = AppControlledTranscriber()
+        let context = makeContext(recorder: recorder, transcriber: transcriber)
+
+        context.model.startRecording()
+        await appWaitUntil("recording") { context.model.state == .recording }
+        context.clock.advance(by: 1)
+        context.model.stopRecording()
+        await appWaitUntil("transcription request") { await transcriber.callCount == 1 }
+        XCTAssertEqual(archive.sources, [sourceURL])
+        context.model.cancelRecording()
+        await appWaitUntil("cancellation") { context.model.state == .idle }
+        await transcriber.succeed(with: "late result")
+        await appWaitUntil("cancellation capture cleanup") { baseRecorder.deleteCount == 1 }
+
+        XCTAssertEqual(archive.sources, [sourceURL])
+        XCTAssertEqual(baseRecorder.deleteCount, 1)
+        XCTAssertEqual(context.model.state, .idle)
+    }
+
+    @MainActor
+    func testSettingDeleteAudioAfterTranscriptionUpdatesAndPersistsImmediately() {
+        let retentionPreferences = RecordingRetentionPreferencesStoreSpy(deleteAudioAfterTranscription: true)
+        let context = makeContext(recordingRetentionPreferences: retentionPreferences)
+
+        XCTAssertTrue(context.model.recordingRetention.deleteAudioAfterTranscription)
+
+        context.model.setDeleteAudioAfterTranscription(false)
+
+        XCTAssertFalse(context.model.recordingRetention.deleteAudioAfterTranscription)
+        XCTAssertEqual(retentionPreferences.saved, [false])
+    }
+
+    @MainActor
+    func testOpeningRecordingsFolderCallsDependencyAndClearsFailure() {
+        let opener = RecordingsFolderOpenerSpy(error: RecordingsFolderOpenFailure.failed)
+        let context = makeContext(recordingsFolderOpener: opener)
+
+        context.model.openRecordingsFolder()
+        XCTAssertTrue(context.model.recordingsFolderOpenFailed)
+
+        opener.error = nil
+        context.model.openRecordingsFolder()
+
+        XCTAssertEqual(opener.openCount, 2)
+        XCTAssertFalse(context.model.recordingsFolderOpenFailed)
+    }
+
+    @MainActor
+    func testOpeningRecordingsFolderFailureSetsFlagAndLogsSafeMessage() {
+        let opener = RecordingsFolderOpenerSpy(error: RecordingsFolderOpenFailure.failed)
+        let context = makeContext(recordingsFolderOpener: opener)
+
+        context.model.openRecordingsFolder()
+
+        XCTAssertTrue(context.model.recordingsFolderOpenFailed)
+        XCTAssertEqual(context.model.logStore.entries.last?.message, "Error: could not open recordings folder.")
+        XCTAssertFalse(context.model.logStore.entries.contains { $0.message.contains("RecordingsFolderOpenFailure") })
+        XCTAssertFalse(context.model.logStore.entries.contains { $0.message.contains("sensitive-path") })
+    }
+
+    @MainActor
     private func makeContext(
         recorder: any AudioRecording = AppRecorderSpy(),
         transcriber: any SpeechTranscribing = AppTranscriberSpy(),
@@ -969,7 +1141,9 @@ final class AppStoreTests: XCTestCase {
         audioCaptureTrimmingResources: any AudioCaptureTrimmingResourceManaging = UnavailableAudioCaptureTrimmingResourceManager(),
         cleanupPromptExportReader: any CleanupPromptExportReading = PromptLibraryExportReaderSpy(result: .failure(.unreadableFile)),
         codexCredentials: any CodexCredentialsStoring & CodexAccessTokenProviding = CodexCredentialStoreSpy(),
-        codexAuthenticator: any CodexAuthenticating = CodexAuthenticatorSpy()
+        codexAuthenticator: any CodexAuthenticating = CodexAuthenticatorSpy(),
+        recordingRetentionPreferences: any RecordingRetentionPreferencesStoring = RecordingRetentionPreferencesStoreSpy(deleteAudioAfterTranscription: true),
+        recordingsFolderOpener: any RecordingsFolderOpening = RecordingsFolderOpenerSpy()
     ) -> AppContext {
         let preferences = configuredForExistingAppTests(preferences)
         let delivery = AppDeliverySpy()
@@ -983,6 +1157,7 @@ final class AppStoreTests: XCTestCase {
             logger: logs
         )
         let preferencesStore = PreferencesStoreSpy(preferences: preferences)
+        let recordingRetention = RecordingRetentionStore(preferencesStore: recordingRetentionPreferences)
         let secretStore = SecretStoreSpy(secrets: secrets ?? [preferences.stt.id: "test-stt-key"])
         let hotkeys = HotkeySpy()
         let launch = LaunchAtLoginSpy()
@@ -1008,6 +1183,8 @@ final class AppStoreTests: XCTestCase {
             textDelivery: delivery,
             cleanupPromptExportReader: cleanupPromptExportReader,
             preferencesStore: preferencesStore,
+            recordingRetention: recordingRetention,
+            recordingsFolderOpener: recordingsFolderOpener,
             keychain: secretStore,
             codexCredentials: codexCredentials,
             codexAuthenticator: codexAuthenticator,
@@ -1101,6 +1278,54 @@ private actor ModelCatalogSpy: RemoteModelDiscovering {
     func discoverModels(configuration: ProviderConfiguration, apiKey: String) async throws -> [String] {
         Array(Set(models)).sorted()
     }
+}
+
+private final class RecordingRetentionPreferencesStoreSpy: RecordingRetentionPreferencesStoring {
+    private let deleteAudioAfterTranscription: Bool
+    private(set) var saved: [Bool] = []
+
+    init(deleteAudioAfterTranscription: Bool) {
+        self.deleteAudioAfterTranscription = deleteAudioAfterTranscription
+    }
+
+    func loadDeleteAudioAfterTranscription() -> Bool {
+        deleteAudioAfterTranscription
+    }
+
+    func saveDeleteAudioAfterTranscription(_ enabled: Bool) {
+        saved.append(enabled)
+    }
+}
+
+@MainActor
+private final class AppRecordingArchiveSpy: RecordingArchiving {
+    private(set) var sources: [URL] = []
+
+    func archive(sourceURL: URL) throws -> URL {
+        sources.append(sourceURL)
+        return sourceURL
+    }
+}
+
+@MainActor
+private final class RecordingsFolderOpenerSpy: RecordingsFolderOpening {
+    var error: Error?
+    private(set) var openCount = 0
+
+    init(error: Error? = nil) {
+        self.error = error
+    }
+
+    func openRecordingsFolder() throws {
+        openCount += 1
+        if let error {
+            throw error
+        }
+    }
+}
+
+private enum RecordingsFolderOpenFailure: Error {
+    case failed
 }
 
 @MainActor

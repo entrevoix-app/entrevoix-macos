@@ -57,6 +57,15 @@ enum CompositionRoot {
         let audioInputDevices = CoreAudioInputDeviceCatalog()
         let logStore = AppLogStore()
         let audioRecorder = AudioRecorder(logger: logStore)
+        let recordingRetentionPreferences = UserDefaultsRecordingRetentionPreferencesStore()
+        let recordingRetention = RecordingRetentionStore(preferencesStore: recordingRetentionPreferences)
+        let recordingArchive = RecordingArchive()
+        let dictationAudioRecorder = DictationAudioRetentionRecorder(
+            recorder: audioRecorder,
+            archive: recordingArchive,
+            deleteAudioAfterTranscription: { recordingRetention.deleteAudioAfterTranscription },
+            logger: logStore
+        )
         let permissions = SystemPermissionProvider()
         let transport = SafeNetworkSession()
         let codexCredentials = CodexCredentialVault()
@@ -81,7 +90,7 @@ enum CompositionRoot {
 
         let coordinator = DictationCoordinator(
             dependencies: DictationDependencies(
-                audioRecorder: audioRecorder,
+                audioRecorder: dictationAudioRecorder,
                 audioCaptureTrimmer: audioCaptureTrimmer,
                 microphonePermission: permissions,
                 textDelivery: textDelivery,
@@ -107,6 +116,8 @@ enum CompositionRoot {
             textDelivery: textDelivery,
             cleanupPromptExportReader: JSONCleanupPromptExportReader(),
             preferencesStore: preferencesStore,
+            recordingRetention: recordingRetention,
+            recordingsFolderOpener: recordingArchive,
             keychain: KeychainStore(legacyService: LegacyMurmureMigration.legacyKeychainService),
             codexCredentials: codexCredentials,
             codexAuthenticator: CodexBrowserAuthenticator(),
