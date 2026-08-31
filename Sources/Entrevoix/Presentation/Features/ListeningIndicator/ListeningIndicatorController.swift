@@ -2,10 +2,22 @@ import AppKit
 import EntrevoixCore
 import SwiftUI
 
+enum ListeningIndicatorPhase: Equatable {
+    case listening
+    case processing
+
+    var color: NSColor {
+        switch self {
+        case .listening: .systemRed
+        case .processing: .systemBlue
+        }
+    }
+}
+
 @MainActor
 protocol ListeningIndicatorPresenting: AnyObject {
-    func show(label: String)
-    func update(label: String)
+    func show(label: String, phase: ListeningIndicatorPhase)
+    func update(label: String, phase: ListeningIndicatorPhase)
     func hide()
 }
 
@@ -35,6 +47,7 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
     private var audioLevelSmoother = ListeningIndicatorAudioLevelSmoother()
     private var audioLevel: CGFloat = 0
     private var label = ""
+    private var phase: ListeningIndicatorPhase = .listening
     private var panelSize = NSSize(width: 128, height: 40)
     private var loggedAnchorSource: ListeningIndicatorAnchor.Source?
     private var lastAnchor: ListeningIndicatorAnchor?
@@ -56,7 +69,7 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
         self.audioMonitor = ListeningIndicatorAudioMonitor(provider: audioLevelProvider)
     }
 
-    func show(label: String) {
+    func show(label: String, phase: ListeningIndicatorPhase) {
         positionTrackingTask?.cancel()
         let positionTrackingSessionID = UUID()
         self.positionTrackingSessionID = positionTrackingSessionID
@@ -70,12 +83,14 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
         panel.setContentSize(panelSize)
         audioLevelSessionID = UUID()
         self.label = label
+        self.phase = phase
         audioLevelSmoother.reset()
         audioLevel = 0
         hostingView?.rootView = ListeningIndicatorView(
             label: label,
             audioLevel: audioLevel,
-            panelWidth: panelSize.width
+            panelWidth: panelSize.width,
+            phase: phase
         )
         loggedAnchorSource = nil
         lastAnchor = nil
@@ -118,8 +133,9 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
         panel?.orderOut(nil)
     }
 
-    func update(label: String) {
+    func update(label: String, phase: ListeningIndicatorPhase) {
         self.label = label
+        self.phase = phase
         panelSize = Self.panelSize(for: label)
         panel?.setContentSize(panelSize)
         audioLevelTask?.cancel()
@@ -130,7 +146,8 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
         hostingView?.rootView = ListeningIndicatorView(
             label: label,
             audioLevel: 0,
-            panelWidth: panelSize.width
+            panelWidth: panelSize.width,
+            phase: phase
         )
         if isPanelVisible {
             updatePosition()
@@ -165,7 +182,8 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
         let hostingView = NSHostingView(rootView: ListeningIndicatorView(
             label: label,
             audioLevel: 0,
-            panelWidth: panelSize.width
+            panelWidth: panelSize.width,
+            phase: phase
         ))
         hostingView.frame = NSRect(origin: .zero, size: panelSize)
         hostingView.autoresizingMask = [.width, .height]
@@ -251,7 +269,8 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
         hostingView?.rootView = ListeningIndicatorView(
             label: label,
             audioLevel: audioLevel,
-            panelWidth: panelSize.width
+            panelWidth: panelSize.width,
+            phase: phase
         )
     }
 
@@ -424,6 +443,7 @@ struct ListeningIndicatorView: View {
     let label: String
     let audioLevel: CGFloat
     let panelWidth: CGFloat
+    let phase: ListeningIndicatorPhase
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -431,13 +451,21 @@ struct ListeningIndicatorView: View {
         HStack(spacing: 8) {
             ZStack {
                 Circle()
-                    .fill(Color(nsColor: .systemRed).opacity(circleOpacity))
+                    .fill(Color(nsColor: phase.color).opacity(circleOpacity))
+                    .animation(
+                        reduceMotion ? nil : .easeInOut(duration: 0.2),
+                        value: phase
+                    )
                     .frame(width: 24, height: 24)
                     .scaleEffect(circleScale)
 
                 Image(systemName: "mic.fill")
                     .font(.callout.weight(.semibold))
-                    .foregroundStyle(Color(nsColor: .systemRed))
+                    .foregroundStyle(Color(nsColor: phase.color))
+                    .animation(
+                        reduceMotion ? nil : .easeInOut(duration: 0.2),
+                        value: phase
+                    )
             }
 
             Text(label)

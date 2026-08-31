@@ -196,7 +196,7 @@ final class DictationStore {
                 "dictation.listening",
                 defaultValue: "Listening…",
                 locale: providerStore.interfaceLocale
-            ))
+            ), phase: .listening)
             playFeedback(.recordingStarted)
         case .recordingStopped:
             playFeedback(.recordingStopped)
@@ -204,13 +204,13 @@ final class DictationStore {
                 "dictation.transcribing",
                 defaultValue: "Transcribing…",
                 locale: providerStore.interfaceLocale
-            ))
+            ), phase: .processing)
         case .cleanupStarted:
             listeningIndicator.update(label: EntrevoixLocalization.text(
                 "dictation.improving",
                 defaultValue: "Improving text…",
                 locale: providerStore.interfaceLocale
-            ))
+            ), phase: .processing)
         case .cleanupStepStarted(let current, let total):
             let format = EntrevoixLocalization.text(
                 "dictation.improving_progress",
@@ -221,7 +221,7 @@ final class DictationStore {
                 format: format,
                 locale: providerStore.interfaceLocale,
                 arguments: [current, total]
-            ))
+            ), phase: .processing)
         case .providerUnavailable(let capability, let reason):
             logStore.log("Apple \(capability.rawValue) unavailable (\(reason.rawValue)).")
             providerAlerts.presentUnavailable(capability: capability, reason: reason)

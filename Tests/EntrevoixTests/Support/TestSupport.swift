@@ -335,11 +335,19 @@ final class FeedbackSpy: FeedbackPlaying {
 @MainActor
 final class ListeningIndicatorSpy: ListeningIndicatorPresenting {
     private(set) var labels: [String] = []
+    private(set) var phases: [ListeningIndicatorPhase] = []
     private(set) var updatedLabels: [String] = []
+    private(set) var updatedPhases: [ListeningIndicatorPhase] = []
     private(set) var hideCount = 0
 
-    func show(label: String) { labels.append(label) }
-    func update(label: String) { updatedLabels.append(label) }
+    func show(label: String, phase: ListeningIndicatorPhase) {
+        labels.append(label)
+        phases.append(phase)
+    }
+    func update(label: String, phase: ListeningIndicatorPhase) {
+        updatedLabels.append(label)
+        updatedPhases.append(phase)
+    }
     func hide() { hideCount += 1 }
 }
 

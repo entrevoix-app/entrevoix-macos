@@ -1,7 +1,13 @@
+import AppKit
 import XCTest
 @testable import Entrevoix
 
 final class ListeningIndicatorTests: XCTestCase {
+    func testIndicatorPhaseUsesRequiredSystemColors() {
+        XCTAssertTrue(ListeningIndicatorPhase.listening.color.isEqual(NSColor.systemRed))
+        XCTAssertTrue(ListeningIndicatorPhase.processing.color.isEqual(NSColor.systemBlue))
+    }
+
     @MainActor
     func testCancelledPositionPollingCannotRevealHiddenIndicator() async {
         let sleeper = ControlledIndicatorSleep()
@@ -17,7 +23,7 @@ final class ListeningIndicatorTests: XCTestCase {
             positionPollingSleep: { duration in try await sleeper.sleep(for: duration) }
         )
 
-        controller.show(label: "Listening…")
+        controller.show(label: "Listening…", phase: .listening)
         await waitUntilPollingIsSuspended(sleeper)
         XCTAssertTrue(controller.isPanelVisible)
 
