@@ -491,6 +491,7 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(recorder.startCount, 1)
         XCTAssertEqual(recorder.stopCount, 1)
         XCTAssertEqual(context.listeningIndicator.labels, ["Listening…"])
+        XCTAssertEqual(context.listeningIndicator.phases, [.listening])
         XCTAssertEqual(context.listeningIndicator.hideCount, 1)
     }
 
@@ -850,6 +851,7 @@ final class AppStoreTests: XCTestCase {
         await appWaitUntil("recording") { context.model.state == .recording }
 
         XCTAssertEqual(context.listeningIndicator.labels, ["Listening…"])
+        XCTAssertEqual(context.listeningIndicator.phases, [.listening])
         XCTAssertEqual(context.listeningIndicator.hideCount, 0)
 
         context.model.cancelRecording()
@@ -874,11 +876,13 @@ final class AppStoreTests: XCTestCase {
 
         XCTAssertEqual(context.model.state, .transcribing)
         XCTAssertEqual(context.listeningIndicator.updatedLabels, ["Transcribing…"])
+        XCTAssertEqual(context.listeningIndicator.updatedPhases, [.processing])
         XCTAssertEqual(context.listeningIndicator.hideCount, 0)
 
         await transcriber.succeed(with: "finished")
         await appWaitUntil("cleanup request") { await cleaner.callCount == 1 }
         XCTAssertEqual(context.listeningIndicator.updatedLabels, ["Transcribing…", "Improving text…"])
+        XCTAssertEqual(context.listeningIndicator.updatedPhases, [.processing, .processing])
         XCTAssertEqual(context.listeningIndicator.hideCount, 0)
 
         await cleaner.succeed(with: "improved")
@@ -916,6 +920,7 @@ final class AppStoreTests: XCTestCase {
             "Improving text… 1/2",
             "Improving text… 2/2"
         ])
+        XCTAssertEqual(context.listeningIndicator.updatedPhases, [.processing, .processing, .processing])
     }
 
     @MainActor

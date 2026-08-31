@@ -15,7 +15,7 @@ final class ListeningIndicatorPanelPresenter {
         self.panelFactory = panelFactory
     }
 
-    func makeIfNeeded(size: NSSize, label: String) -> NSPanel {
+    func makeIfNeeded(size: NSSize, label: String, phase: ListeningIndicatorPhase) -> NSPanel {
         if let panel { return panel }
         let panel = panelFactory(NSRect(origin: .zero, size: size))
         panel.level = .floating
@@ -26,7 +26,7 @@ final class ListeningIndicatorPanelPresenter {
         panel.ignoresMouseEvents = true
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
-        let hostingView = NSHostingView(rootView: ListeningIndicatorView(label: label, audioLevel: 0, panelWidth: size.width))
+        let hostingView = NSHostingView(rootView: ListeningIndicatorView(label: label, audioLevel: 0, panelWidth: size.width, phase: phase))
         hostingView.frame = NSRect(origin: .zero, size: size)
         hostingView.autoresizingMask = [.width, .height]
         panel.contentView = hostingView
@@ -35,8 +35,8 @@ final class ListeningIndicatorPanelPresenter {
         return panel
     }
 
-    func render(label: String, level: CGFloat, width: CGFloat) {
-        hostingView?.rootView = ListeningIndicatorView(label: label, audioLevel: level, panelWidth: width)
+    func render(label: String, level: CGFloat, width: CGFloat, phase: ListeningIndicatorPhase) {
+        hostingView?.rootView = ListeningIndicatorView(label: label, audioLevel: level, panelWidth: width, phase: phase)
     }
 
     func hide() { panel?.orderOut(nil) }
