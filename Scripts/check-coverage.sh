@@ -7,7 +7,7 @@ cd "$repository_root"
 
 swift test --enable-code-coverage -Xswiftc -warnings-as-errors
 coverage_json="$(swift test --show-codecov-path)"
-application_coverage_pattern='(/Sources/Entrevoix/(Presentation/Stores/[^/]+|Adapters/(Accessibility/FocusedTextElementResolver|Codex/CodexCleanupService|Delivery/TextDelivery|Providers/ProviderRouters))|/\.build/checkouts/entrevoix-shared/Sources/(EntrevoixAppleAdapters/(KeychainStore|UserDefaultsPreferencesStore)|EntrevoixOpenAIAdapters/(OpenAITextCleanupService|OpenAITranscriptionService|RemoteModelCatalogClient|SafeNetworkSession)))\.swift$'
+application_coverage_pattern='(/Sources/Entrevoix/(Presentation/Stores/[^/]+|Adapters/(Accessibility/FocusedTextElementResolver|Codex/CodexCleanupService|Delivery/TextDelivery|Providers/ProviderRouters))|/Vendor/entrevoix-shared/Sources/(EntrevoixAppleAdapters/(KeychainStore|UserDefaultsPreferencesStore)|EntrevoixOpenAIAdapters/(OpenAITextCleanupService|OpenAITranscriptionService|RemoteModelCatalogClient|SafeNetworkSession)))\.swift$'
 
 if [[ ! -f "$coverage_json" ]]; then
     echo "Coverage report not found: $coverage_json" >&2
@@ -22,7 +22,7 @@ print_files() {
         '.data[0].files[]
         | select(
             if $group == "core" then
-                .filename | contains("/.build/checkouts/entrevoix-shared/Sources/EntrevoixCore/")
+                .filename | contains("/Vendor/entrevoix-shared/Sources/EntrevoixCore/")
             else
                 .filename | test($applicationPattern)
             end
@@ -42,7 +42,7 @@ check_group() {
         '[.data[0].files[]
           | select(
               if $group == "core" then
-                  .filename | contains("/.build/checkouts/entrevoix-shared/Sources/EntrevoixCore/")
+                    .filename | contains("/Vendor/entrevoix-shared/Sources/EntrevoixCore/")
               else
                   .filename | test($applicationPattern)
               end

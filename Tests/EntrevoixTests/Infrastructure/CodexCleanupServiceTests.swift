@@ -4,7 +4,7 @@ import EntrevoixCore
 @testable import Entrevoix
 
 final class CodexCleanupServiceTests: XCTestCase {
-    func testBuildsCodexResponsesRequestWithoutLeakingCredentials() async throws {
+    func testBuildsCodexResponsesRequestWithLanguageHeaderAndOmitsItForAutomaticLanguage() async throws {
         let transport = HTTPStub { request in
             response(url: request.url!, data: Data("{\"output_text\":\"cleaned\"}".utf8))
         }
@@ -27,7 +27,8 @@ final class CodexCleanupServiceTests: XCTestCase {
                 format: .responses,
                 prompt: "Clean it.",
                 failurePolicy: .stop,
-                target: .codex
+                target: .codex,
+                language: "fr"
             )
         )
 
@@ -38,6 +39,7 @@ final class CodexCleanupServiceTests: XCTestCase {
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-secret")
         XCTAssertEqual(request.value(forHTTPHeaderField: "ChatGPT-Account-Id"), "account-1")
         XCTAssertEqual(request.value(forHTTPHeaderField: "x-openai-internal-codex-residency"), "eu")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "X-Text-Language"), "fr")
         let body = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(request.httpBody)) as? [String: Any])
         XCTAssertEqual(body["model"] as? String, "gpt-5.6-luna")
         XCTAssertEqual(body["instructions"] as? String, CleanupTransformationPolicy.systemInstructions)
@@ -46,6 +48,22 @@ final class CodexCleanupServiceTests: XCTestCase {
             CleanupTransformationPolicy.input(instructions: "Clean it.", transcript: "raw text")
         )
         XCTAssertEqual(body["store"] as? Bool, false)
+
+        _ = try await service.clean(
+            text: "raw text",
+            request: CleanupRequest(
+                configuration: .codexResponses(model: .gpt56Luna),
+                apiKey: "",
+                format: .responses,
+                prompt: "Clean it.",
+                failurePolicy: .stop,
+                target: .codex,
+                language: Optional<String>.none
+            )
+        )
+        let requestsAfterAutomaticCleanup = await transport.requests
+        let automaticRequest = try XCTUnwrap(requestsAfterAutomaticCleanup.last)
+        XCTAssertNil(automaticRequest.value(forHTTPHeaderField: "X-Text-Language"))
     }
 
     func testRejectsMissingCodexCredentialsBeforeNetworkAccess() async {

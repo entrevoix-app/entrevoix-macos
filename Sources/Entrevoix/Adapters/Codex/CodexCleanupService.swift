@@ -31,6 +31,9 @@ struct CodexCleanupService: TextCleaning {
         urlRequest.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
         urlRequest.setValue("opencode", forHTTPHeaderField: "originator")
         urlRequest.setValue("Entrevoix", forHTTPHeaderField: "User-Agent")
+        if let language = request.language {
+            urlRequest.setValue(language, forHTTPHeaderField: "X-Text-Language")
+        }
         if let accountID = credentials.accountID, !accountID.isEmpty {
             urlRequest.setValue(accountID, forHTTPHeaderField: "ChatGPT-Account-Id")
         }
