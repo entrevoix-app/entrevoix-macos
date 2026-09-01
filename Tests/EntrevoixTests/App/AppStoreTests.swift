@@ -177,6 +177,77 @@ final class AppStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testFrenchSTTLanguagePropagatesToRemoteCleanupPlan() {
+        var preferences = AppPreferences(interfaceLanguage: .english)
+        preferences.sttLanguage = .french
+        let context = makeContext(preferences: preferences)
+
+        let request = context.model.providerStore.makeDictationRequest(
+            activeCleanupSelection: context.model.preferences.activeCleanupSelection,
+            cleanupPrompts: context.model.preferences.cleanupPrompts,
+            cleanupWorkflows: context.model.preferences.cleanupWorkflows
+        )
+
+        XCTAssertEqual(request?.cleanup?.language, "fr")
+    }
+
+    @MainActor
+    func testFrenchSTTLanguagePropagatesToAnthropicCleanupPlan() {
+        var preferences = AppPreferences(interfaceLanguage: .english)
+        preferences.sttLanguage = .french
+        let context = makeContext(preferences: preferences)
+        let anthropic = RemoteProviderProfile.anthropic()
+        context.model.preferences.providerCatalog.append(.remote(anthropic))
+        context.model.preferences.selectedTTTProviderID = .remote(anthropic.id)
+
+        let request = context.model.providerStore.makeDictationRequest(
+            activeCleanupSelection: context.model.preferences.activeCleanupSelection,
+            cleanupPrompts: context.model.preferences.cleanupPrompts,
+            cleanupWorkflows: context.model.preferences.cleanupWorkflows
+        )
+
+        XCTAssertEqual(request?.cleanup?.language, "fr")
+    }
+
+    @MainActor
+    func testFrenchSTTLanguagePropagatesToCodexCleanupPlan() {
+        var preferences = AppPreferences(interfaceLanguage: .english)
+        preferences.sttLanguage = .french
+        let context = makeContext(preferences: preferences)
+        context.model.addCodexProvider()
+        context.model.setTTTProvider(.codex)
+
+        let request = context.model.providerStore.makeDictationRequest(
+            activeCleanupSelection: context.model.preferences.activeCleanupSelection,
+            cleanupPrompts: context.model.preferences.cleanupPrompts,
+            cleanupWorkflows: context.model.preferences.cleanupWorkflows
+        )
+
+        XCTAssertEqual(request?.cleanup?.language, "fr")
+    }
+
+    @MainActor
+    func testAutomaticSTTLanguagePropagatesNilToEveryRemoteCleanupPlan() {
+        let remote = makeContext()
+        let anthropic = makeContext()
+        let codex = makeContext()
+        let anthropicProfile = RemoteProviderProfile.anthropic()
+        anthropic.model.preferences.providerCatalog.append(.remote(anthropicProfile))
+        anthropic.model.preferences.selectedTTTProviderID = .remote(anthropicProfile.id)
+        codex.model.addCodexProvider()
+        codex.model.setTTTProvider(.codex)
+
+        for context in [remote, anthropic, codex] {
+            let request = context.model.providerStore.makeDictationRequest(
+                activeCleanupSelection: context.model.preferences.activeCleanupSelection,
+                cleanupPrompts: context.model.preferences.cleanupPrompts,
+                cleanupWorkflows: context.model.preferences.cleanupWorkflows
+            )
+            XCTAssertNil(request?.cleanup?.language)
+        }
+    }
+
+    @MainActor
     func testDownloadsAudioTrimmingResourceOnlyWhenRequested() async {
         let resources = AppAudioCaptureTrimmingResourceManagerSpy(state: .downloadRequired)
         let context = makeContext(audioCaptureTrimmingResources: resources)

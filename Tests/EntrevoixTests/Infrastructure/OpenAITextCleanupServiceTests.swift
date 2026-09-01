@@ -87,6 +87,87 @@ final class OpenAITextCleanupServiceTests: XCTestCase {
         }
     }
 
+    func testResponsesCleanupSendsFrenchLanguageHeaderAndOmitsItForAutomaticLanguage() async throws {
+        let transport = HTTPStub { request in
+            response(url: request.url!, data: Data("{\"output_text\":\"cleaned\"}".utf8))
+        }
+        let service = OpenAITextCleanupService(transport: transport)
+
+        _ = try await service.clean(text: "raw", request: CleanupRequest(
+            configuration: cleanupConfiguration(),
+            apiKey: "",
+            format: .responses,
+            prompt: "clean",
+            failurePolicy: .stop,
+            target: .remote,
+            language: "fr"
+        ))
+        _ = try await service.clean(text: "raw", request: CleanupRequest(
+            configuration: cleanupConfiguration(),
+            apiKey: "",
+            format: .responses,
+            prompt: "clean",
+            failurePolicy: .stop,
+            target: .remote,
+            language: Optional<String>.none
+        ))
+
+        let requests = await transport.requests
+        XCTAssertEqual(requests[0].value(forHTTPHeaderField: "X-Text-Language"), "fr")
+        XCTAssertNil(requests[1].value(forHTTPHeaderField: "X-Text-Language"))
+    }
+
+    func testChatCompletionsCleanupSendsFrenchLanguageHeader() async throws {
+        let transport = HTTPStub { request in
+            response(url: request.url!, data: Data("{\"choices\":[{\"message\":{\"content\":\"cleaned\"}}]}".utf8))
+        }
+
+        _ = try await OpenAITextCleanupService(transport: transport).clean(text: "raw", request: CleanupRequest(
+            configuration: cleanupConfiguration(path: "chat/completions"),
+            apiKey: "",
+            format: .chatCompletions,
+            prompt: "clean",
+            failurePolicy: .stop,
+            target: .remote,
+            language: "fr"
+        ))
+
+        let requests = await transport.requests
+        let request = try XCTUnwrap(requests.first)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "X-Text-Language"), "fr")
+    }
+
+    func testAnthropicCleanupSendsFrenchLanguageHeaderAndOmitsItForAutomaticLanguage() async throws {
+        let transport = HTTPStub { request in
+            response(url: request.url!, data: Data("{\"content\":[{\"type\":\"text\",\"text\":\"cleaned\"}]}".utf8))
+        }
+        let service = AnthropicTextCleanupService(transport: transport)
+        let configuration = try XCTUnwrap(RemoteProviderProfile.anthropic().configuration(for: .ttt))
+
+        _ = try await service.clean(text: "raw", request: CleanupRequest(
+            configuration: configuration,
+            apiKey: "key",
+            format: .anthropicMessages,
+            prompt: "clean",
+            failurePolicy: .stop,
+            target: .anthropic,
+            language: "fr"
+        ))
+        _ = try await service.clean(text: "raw", request: CleanupRequest(
+            configuration: configuration,
+            apiKey: "key",
+            format: .anthropicMessages,
+            prompt: "clean",
+            failurePolicy: .stop,
+            target: .anthropic,
+            language: Optional<String>.none
+        ))
+
+        let requests = await transport.requests
+        XCTAssertEqual(requests[0].value(forHTTPHeaderField: "X-Text-Language"), "fr")
+        XCTAssertNil(requests[1].value(forHTTPHeaderField: "X-Text-Language"))
+    }
+
     func testUsesRawTranscriptWhenProviderEchoesCleanupPolicy() async throws {
         let cleanupPolicy = "Clean up this transcript without changing its meaning or original language."
         let echoedPolicy = "Cleanup policy:\n\(cleanupPolicy)"

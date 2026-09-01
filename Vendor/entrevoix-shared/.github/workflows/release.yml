@@ -1,0 +1,113 @@
+name: Release shared package
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semantic version without the v prefix (for example, 0.1.1)
+        required: true
+        type: string
+      release_notes:
+        description: Release notes markdown
+        required: true
+        type: string
+      draft:
+        description: Leave the GitHub release as a draft after uploads
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: shared-package-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Validate, archive, and publish
+    runs-on: macos-26
+    env:
+      ENTREVOIX_SHARED_VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Require the default branch
+        run: |
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || {
+            echo "Run releases from the main branch."
+            exit 1
+          }
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Validate release version
+        run: |
+          version_pattern='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?(\+[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$'
+          [[ "$ENTREVOIX_SHARED_VERSION" =~ $version_pattern ]] || {
+            echo "Version must be semantic and omit the v prefix."
+            exit 1
+          }
+
+          tag="v$ENTREVOIX_SHARED_VERSION"
+          ! git ls-remote --exit-code --tags origin "refs/tags/$tag" || {
+            echo "Tag $tag already exists."
+            exit 1
+          }
+
+      - name: Test on macOS
+        run: swift test -Xswiftc -warnings-as-errors
+
+      - name: Build for iOS Simulator
+        run: >-
+          xcodebuild
+          -scheme EntrevoixShared-Package
+          -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO
+          SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
+          build
+
+      - name: Create source archive
+        run: |
+          artifacts_directory="$GITHUB_WORKSPACE/.build/release-artifacts"
+          mkdir -p "$artifacts_directory"
+          archive_path="$artifacts_directory/EntrevoixShared-$ENTREVOIX_SHARED_VERSION.zip"
+          swift package archive-source --output "$archive_path"
+          echo "ARCHIVE_PATH=$archive_path" >> "$GITHUB_ENV"
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: EntrevoixShared-${{ inputs.version }}-source
+          path: .build/release-artifacts/EntrevoixShared-${{ inputs.version }}.zip
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+          overwrite: true
+
+      - name: Create GitHub release and tag
+        env:
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: |
+          tag="v$ENTREVOIX_SHARED_VERSION"
+          notes_path="$RUNNER_TEMP/release-notes.md"
+          printf '%s\n' "$RELEASE_NOTES" > "$notes_path"
+          release_args=(
+            "$tag"
+            "$ARCHIVE_PATH"
+            "--target" "$GITHUB_SHA"
+            "--title" "EntrevoixShared $ENTREVOIX_SHARED_VERSION"
+            "--notes-file" "$notes_path"
+          )
+          [[ "${{ inputs.draft }}" == "true" ]] && release_args+=("--draft")
+          gh release create "${release_args[@]}"

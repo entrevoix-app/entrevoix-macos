@@ -378,6 +378,7 @@ final class ProviderStore {
                 format: .responses,
                 failurePolicy: preferences.cleanupFailurePolicy,
                 target: .codex,
+                language: preferences.sttLanguage.apiCode,
                 kind: kind,
                 steps: steps
             )
@@ -390,6 +391,7 @@ final class ProviderStore {
                 format: profile.ttt?.format ?? .responses,
                 failurePolicy: preferences.cleanupFailurePolicy,
                 target: profile.kind == .anthropic ? .anthropic : .remote,
+                language: preferences.sttLanguage.apiCode,
                 kind: kind,
                 steps: steps
             )
