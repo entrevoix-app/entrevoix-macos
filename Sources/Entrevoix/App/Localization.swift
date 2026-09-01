@@ -28,11 +28,14 @@ enum EntrevoixLocalization {
 
     static func text(
         _ key: String,
-        defaultValue: String,
+        defaultValue: String = "",
         locale: Locale
     ) -> String {
         let localizedBundle = bundle(for: locale)
-        return localizedBundle.localizedString(forKey: key, value: defaultValue, table: nil)
+        let value = localizedBundle.localizedString(forKey: key, value: defaultValue, table: nil)
+        guard value == key || value == defaultValue else { return value }
+        guard defaultValue.isEmpty else { return value }
+        return sourceCatalogValue(for: key, locale: locale) ?? value
     }
 
     static func aboutVersion(_ version: String = AppVersion.marketingVersion, locale: Locale) -> String {
@@ -154,6 +157,26 @@ enum EntrevoixLocalization {
     static func sourceCatalogData() -> Data? {
         guard let url = resourceURL(forResource: "Localizable", withExtension: "xcstrings") else { return nil }
         return try? Data(contentsOf: url)
+    }
+
+    private static func sourceCatalogValue(for key: String, locale: Locale) -> String? {
+        guard
+            let data = sourceCatalogData(),
+            let catalog = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let strings = catalog["strings"] as? [String: Any],
+            let entry = strings[key] as? [String: Any],
+            let localizations = entry["localizations"] as? [String: Any]
+        else {
+            return nil
+        }
+        let identifier = locale.identifier.replacingOccurrences(of: "_", with: "-")
+        let language = locale.language.languageCode?.identifier
+        for identifier in [identifier, language].compactMap({ $0 }) {
+            if let value = ((localizations[identifier] as? [String: Any])?["stringUnit"] as? [String: Any])?["value"] as? String {
+                return value
+            }
+        }
+        return nil
     }
 }
 

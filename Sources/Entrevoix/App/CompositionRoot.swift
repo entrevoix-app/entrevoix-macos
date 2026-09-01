@@ -7,7 +7,11 @@ import EntrevoixOpenAIAdapters
 enum CompositionRoot {
     enum LaunchState {
         case ready(AppEnvironment, recoveredPreferences: Bool)
-        case incompatible(schemaVersion: Int, updater: any ApplicationUpdating)
+        case incompatible(
+            schemaVersion: Int,
+            preferencesStore: any PreferencesStoring,
+            updater: any ApplicationUpdating
+        )
     }
 
     static func makeLaunchState() -> LaunchState {
@@ -25,7 +29,11 @@ enum CompositionRoot {
             loadedPreferences = preferences
             recovered = true
         case .incompatible(let schemaVersion):
-            return .incompatible(schemaVersion: schemaVersion, updater: updater)
+            return .incompatible(
+                schemaVersion: schemaVersion,
+                preferencesStore: preferencesStore,
+                updater: updater
+            )
         }
 
         let migratedPreferences = PreferencesMigrator.migrate(
@@ -49,8 +57,8 @@ enum CompositionRoot {
         )
     }
 
-    private static func makeEnvironment(
-        preferencesStore: UserDefaultsPreferencesStore,
+    static func makeEnvironment(
+        preferencesStore: any PreferencesStoring,
         initialPreferences: AppPreferences,
         updater: any ApplicationUpdating = SparkleUpdateService()
     ) -> AppEnvironment {
@@ -140,5 +148,61 @@ enum CompositionRoot {
             now: Date.init
         ), initialPreferences: initialPreferences)
         return AppEnvironment(appStore: appStore)
+    }
+}
+
+@MainActor
+final class IncompatibleStartupActionHandler {
+    enum Action {
+        case update
+        case openAnyway
+        case quit
+    }
+
+    enum Result {
+        case incompatible
+        case ready(AppPreferences, any PreferencesStoring)
+    }
+
+    private let updater: any ApplicationUpdating
+    private let terminate: () -> Void
+
+    init(
+        preferencesStore: any PreferencesStoring,
+        updater: any ApplicationUpdating,
+        terminate: @escaping () -> Void
+    ) {
+        self.updater = updater
+        self.terminate = terminate
+    }
+
+    @discardableResult
+    func handle(_ action: Action) -> Result {
+        switch action {
+        case .update:
+            updater.checkForUpdates()
+            return .incompatible
+        case .openAnyway:
+            return .ready(AppPreferences(), InMemoryPreferencesStore())
+        case .quit:
+            terminate()
+            return .incompatible
+        }
+    }
+}
+
+private final class InMemoryPreferencesStore: PreferencesStoring {
+    private var preferences = AppPreferences()
+
+    func load() -> PreferencesLoadResult {
+        .loaded(preferences)
+    }
+
+    func save(_ preferences: AppPreferences) {
+        self.preferences = preferences
+    }
+
+    func reset() {
+        preferences = AppPreferences()
     }
 }
