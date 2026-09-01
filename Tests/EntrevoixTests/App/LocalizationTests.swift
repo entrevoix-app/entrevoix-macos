@@ -207,6 +207,50 @@ final class LocalizationTests: XCTestCase {
 
     }
 
+    func testEnglishIncompatibleStartupMessageWarnsThatTemporaryChangesMayBeUnstableAndUnsaved() {
+        let message = EntrevoixLocalization.text(
+            "startup.incompatible.message",
+            defaultValue: "",
+            locale: Locale(identifier: "en")
+        )
+
+        XCTAssertTrue(message.contains("may be unstable"))
+        XCTAssertTrue(message.contains("will not be saved"))
+    }
+
+    func testFrenchIncompatibleStartupMessageWarnsThatTemporaryChangesMayBeUnstableAndUnsaved() {
+        let message = EntrevoixLocalization.text(
+            "startup.incompatible.message",
+            defaultValue: "",
+            locale: Locale(identifier: "fr-FR")
+        )
+
+        XCTAssertTrue(message.contains("instables"))
+        XCTAssertTrue(message.contains("ne seront pas enregistrées"))
+    }
+
+    func testEnglishIncompatibleStartupOpenAnywayActionIsLocalized() {
+        XCTAssertEqual(
+            EntrevoixLocalization.text(
+                "startup.incompatible.open_anyway",
+                defaultValue: "",
+                locale: Locale(identifier: "en")
+            ),
+            "Open Anyway"
+        )
+    }
+
+    func testFrenchIncompatibleStartupOpenAnywayActionIsLocalized() {
+        XCTAssertEqual(
+            EntrevoixLocalization.text(
+                "startup.incompatible.open_anyway",
+                defaultValue: "",
+                locale: Locale(identifier: "fr-FR")
+            ),
+            "Ouvrir quand même"
+        )
+    }
+
     func testEveryLocalizationKeyUsedBySourceHasEnglishAndFrenchValues() throws {
         let data = try XCTUnwrap(EntrevoixLocalization.sourceCatalogData())
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])

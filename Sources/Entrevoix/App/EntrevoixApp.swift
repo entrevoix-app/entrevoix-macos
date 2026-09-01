@@ -64,9 +64,13 @@ struct EntrevoixApp: App {
             } else {
                 Text(EntrevoixLocalization.text("startup.incompatible.title", defaultValue: "Entrevoix Update Required", locale: Locale(identifier: "en")))
                 .task {
-                    guard case .incompatible(let schemaVersion, let updater) = launchState, !didShowIncompatibleAlert else { return }
+                    guard case .incompatible(let schemaVersion, let preferencesStore, let updater) = launchState, !didShowIncompatibleAlert else { return }
                     didShowIncompatibleAlert = true
-                    presentIncompatibleAlert(schemaVersion: schemaVersion, updater: updater)
+                    presentIncompatibleAlert(
+                        schemaVersion: schemaVersion,
+                        preferencesStore: preferencesStore,
+                        updater: updater
+                    )
                 }
                 Button(EntrevoixLocalization.text("action.quit", defaultValue: "Quit", locale: Locale(identifier: "en"))) {
                     NSApplication.shared.terminate(nil)
@@ -187,8 +191,12 @@ struct EntrevoixApp: App {
         return image
     }
 
-    private func presentIncompatibleAlert(schemaVersion: Int, updater: any ApplicationUpdating) {
-        let locale = Locale(identifier: "en")
+    private func presentIncompatibleAlert(
+        schemaVersion: Int,
+        preferencesStore: any PreferencesStoring,
+        updater: any ApplicationUpdating
+    ) {
+        let locale = EntrevoixLocalization.locale(for: .automatic)
         let alert = NSAlert()
         alert.alertStyle = .critical
         alert.messageText = EntrevoixLocalization.text(
@@ -198,7 +206,7 @@ struct EntrevoixApp: App {
         )
         let format = EntrevoixLocalization.text(
             "startup.incompatible.message",
-            defaultValue: "These settings were written by a newer version of Entrevoix (schema %lld). Update Entrevoix before using this installation so the newer settings are not overwritten.",
+            defaultValue: "These settings were written by a newer version of Entrevoix (schema %lld). Update Entrevoix before using this installation, or open anyway with default settings. Temporary changes may be unstable and will not be saved.",
             locale: locale
         )
         alert.informativeText = String(format: format, locale: locale, arguments: [schemaVersion])
@@ -207,13 +215,36 @@ struct EntrevoixApp: App {
             defaultValue: "Check for Updates…",
             locale: locale
         ))
+        alert.addButton(withTitle: EntrevoixLocalization.text(
+            "startup.incompatible.open_anyway",
+            defaultValue: "Open Anyway",
+            locale: locale
+        ))
         alert.addButton(withTitle: EntrevoixLocalization.text("action.quit", defaultValue: "Quit", locale: locale))
         NSApp.activate()
         let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            updater.checkForUpdates()
-        } else {
-            NSApplication.shared.terminate(nil)
+        let action: IncompatibleStartupActionHandler.Action
+        switch response {
+        case .alertFirstButtonReturn:
+            action = .update
+        case .alertSecondButtonReturn:
+            action = .openAnyway
+        default:
+            action = .quit
+        }
+        let handler = IncompatibleStartupActionHandler(
+            preferencesStore: preferencesStore,
+            updater: updater,
+            terminate: { NSApplication.shared.terminate(nil) }
+        )
+        if case .ready(let preferences, let sessionPreferencesStore) = handler.handle(action) {
+            let environment = CompositionRoot.makeEnvironment(
+                preferencesStore: sessionPreferencesStore,
+                initialPreferences: preferences,
+                updater: updater
+            )
+            launchState = .ready(environment, recoveredPreferences: false)
+            environment.appStore.requestUnresolvedPermissionsAtLaunch()
         }
     }
 }
