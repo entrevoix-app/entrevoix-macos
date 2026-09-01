@@ -14,6 +14,14 @@ enum ListeningIndicatorPhase: Equatable {
     }
 }
 
+struct ListeningIndicatorRenderedFrame {
+    let label: String
+    let phase: ListeningIndicatorPhase
+    let color: NSColor
+    let usesPhaseAnimation: Bool
+    let usesAudioLevelAnimation: Bool
+}
+
 @MainActor
 protocol ListeningIndicatorPresenting: AnyObject {
     func show(label: String, phase: ListeningIndicatorPhase)
@@ -53,18 +61,23 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
     private var lastAnchor: ListeningIndicatorAnchor?
     private var pendingInitialAnchor: ListeningIndicatorAnchor?
     private var unresolvedInitialSampleCount = 0
+    private var pendingDisplayUpdate: (label: String, phase: ListeningIndicatorPhase)?
+    private let accessibilityReduceMotion: Bool?
     private(set) var isPanelVisible = false
+    private(set) var visibleFrames: [ListeningIndicatorRenderedFrame] = []
 
     init(
         positionProvider: ListeningIndicatorPositionProvider = ListeningIndicatorPositionProvider(),
         audioLevelProvider: any AudioLevelProviding,
         logger: any LogWriting,
-        positionPollingSleep: @escaping Sleep = { try await Task.sleep(for: $0) }
+        positionPollingSleep: @escaping Sleep = { try await Task.sleep(for: $0) },
+        accessibilityReduceMotion: Bool? = nil
     ) {
         self.positionProvider = positionProvider
         self.audioLevelProvider = audioLevelProvider
         self.logger = logger
         self.positionPollingSleep = positionPollingSleep
+        self.accessibilityReduceMotion = accessibilityReduceMotion
         self.positionTracker = ListeningIndicatorPositionTracker(provider: positionProvider, logger: logger)
         self.audioMonitor = ListeningIndicatorAudioMonitor(provider: audioLevelProvider)
     }
@@ -84,14 +97,11 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
         audioLevelSessionID = UUID()
         self.label = label
         self.phase = phase
+        pendingDisplayUpdate = nil
+        visibleFrames = []
         audioLevelSmoother.reset()
         audioLevel = 0
-        hostingView?.rootView = ListeningIndicatorView(
-            label: label,
-            audioLevel: audioLevel,
-            panelWidth: panelSize.width,
-            phase: phase
-        )
+        renderView()
         loggedAnchorSource = nil
         lastAnchor = nil
         pendingInitialAnchor = nil
@@ -134,6 +144,11 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
     }
 
     func update(label: String, phase: ListeningIndicatorPhase) {
+        guard isPanelVisible else {
+            pendingDisplayUpdate = (label, phase)
+            return
+        }
+
         self.label = label
         self.phase = phase
         panelSize = Self.panelSize(for: label)
@@ -143,15 +158,9 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
         audioLevelSessionID = nil
         audioLevelSmoother.reset()
         audioLevel = 0
-        hostingView?.rootView = ListeningIndicatorView(
-            label: label,
-            audioLevel: 0,
-            panelWidth: panelSize.width,
-            phase: phase
-        )
-        if isPanelVisible {
-            updatePosition()
-        }
+        renderView()
+        recordVisibleFrame()
+        updatePosition()
     }
 
     private func makePanelIfNeeded() -> NSPanel {
@@ -179,12 +188,7 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
             .ignoresCycle
         ]
 
-        let hostingView = NSHostingView(rootView: ListeningIndicatorView(
-            label: label,
-            audioLevel: 0,
-            panelWidth: panelSize.width,
-            phase: phase
-        ))
+        let hostingView = NSHostingView(rootView: indicatorView())
         hostingView.frame = NSRect(origin: .zero, size: panelSize)
         hostingView.autoresizingMask = [.width, .height]
         panel.contentView = hostingView
@@ -238,6 +242,12 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
         if !isPanelVisible {
             isPanelVisible = true
             panel.orderFrontRegardless()
+            panel.displayIfNeeded()
+            recordVisibleFrame()
+            if let pendingDisplayUpdate {
+                self.pendingDisplayUpdate = nil
+                update(label: pendingDisplayUpdate.label, phase: pendingDisplayUpdate.phase)
+            }
             if let audioLevelSessionID {
                 startAudioLevelMonitoring(sessionID: audioLevelSessionID)
             }
@@ -266,12 +276,7 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
     private func sampleAudioLevel() {
         audioLevelProvider.updateMeters()
         audioLevel = audioLevelSmoother.update(decibels: audioLevelProvider.averagePower)
-        hostingView?.rootView = ListeningIndicatorView(
-            label: label,
-            audioLevel: audioLevel,
-            panelWidth: panelSize.width,
-            phase: phase
-        )
+        renderView()
     }
 
     private static func panelSize(for label: String) -> NSSize {
@@ -282,6 +287,30 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
             width: min(max(minimumPanelSize.width, intrinsicWidth), maximumPanelWidth),
             height: minimumPanelSize.height
         )
+    }
+
+    private func indicatorView() -> ListeningIndicatorView {
+        ListeningIndicatorView(
+            label: label,
+            audioLevel: audioLevel,
+            panelWidth: panelSize.width,
+            phase: phase,
+            accessibilityReduceMotion: accessibilityReduceMotion
+        )
+    }
+
+    private func renderView() {
+        hostingView?.rootView = indicatorView()
+    }
+
+    private func recordVisibleFrame() {
+        visibleFrames.append(ListeningIndicatorRenderedFrame(
+            label: label,
+            phase: phase,
+            color: phase.color,
+            usesPhaseAnimation: false,
+            usesAudioLevelAnimation: accessibilityReduceMotion != true
+        ))
     }
 
     private func initialAnchorIsReady(_ anchor: ListeningIndicatorAnchor) -> Bool {
@@ -444,28 +473,36 @@ struct ListeningIndicatorView: View {
     let audioLevel: CGFloat
     let panelWidth: CGFloat
     let phase: ListeningIndicatorPhase
+    let accessibilityReduceMotion: Bool?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init(
+        label: String,
+        audioLevel: CGFloat,
+        panelWidth: CGFloat,
+        phase: ListeningIndicatorPhase,
+        accessibilityReduceMotion: Bool? = nil
+    ) {
+        self.label = label
+        self.audioLevel = audioLevel
+        self.panelWidth = panelWidth
+        self.phase = phase
+        self.accessibilityReduceMotion = accessibilityReduceMotion
+    }
 
     var body: some View {
         HStack(spacing: 8) {
             ZStack {
                 Circle()
                     .fill(Color(nsColor: phase.color).opacity(circleOpacity))
-                    .animation(
-                        reduceMotion ? nil : .easeInOut(duration: 0.2),
-                        value: phase
-                    )
                     .frame(width: 24, height: 24)
                     .scaleEffect(circleScale)
 
                 Image(systemName: "mic.fill")
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(Color(nsColor: phase.color))
-                    .animation(
-                        reduceMotion ? nil : .easeInOut(duration: 0.2),
-                        value: phase
-                    )
+                    .animation(nil, value: audioLevel)
             }
 
             Text(label)
@@ -479,17 +516,21 @@ struct ListeningIndicatorView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
         .animation(
-            reduceMotion ? nil : .easeOut(duration: 0.08),
+            shouldReduceMotion ? nil : .easeOut(duration: 0.08),
             value: audioLevel
         )
     }
 
     private var circleScale: CGFloat {
-        reduceMotion ? 0.82 : 0.82 + (audioLevel * 0.40)
+        shouldReduceMotion ? 0.82 : 0.82 + (audioLevel * 0.40)
     }
 
     private var circleOpacity: Double {
         0.18 + (Double(audioLevel) * 0.36)
+    }
+
+    private var shouldReduceMotion: Bool {
+        accessibilityReduceMotion ?? reduceMotion
     }
 }
 
