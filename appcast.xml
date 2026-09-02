@@ -3,6 +3,15 @@
     <channel>
         <title>Entrevoix</title>
         <item>
+            <title>0.5.0</title>
+            <pubDate>Wed, 02 Sep 2026 12:37:45 +0000</pubDate>
+            <sparkle:version>26</sparkle:version>
+            <sparkle:shortVersionString>0.5.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/entrevoix-app/entrevoix-macos/releases/download/v0.5.0/Entrevoix-0.5.0-macos.dmg" length="4746658" type="application/octet-stream" sparkle:edSignature="C8lTD17A1tpkwuDOm/a0xR67zuX0C4KeLoyOoNvMzWxOdKRlJTVvOeyKcIRF6z7DzoYW6Pv+4isgNZ0kMAixBA=="/>
+        </item>
+        <item>
             <title>0.5.0-rc.5</title>
             <pubDate>Tue, 01 Sep 2026 16:18:59 +0000</pubDate>
             <sparkle:channel>rc</sparkle:channel>
@@ -13,26 +22,6 @@
             <enclosure url="https://github.com/entrevoix-app/entrevoix-macos/releases/download/v0.5.0-rc.5/Entrevoix-0.5.0-rc.5-macos.dmg" length="4746689" type="application/octet-stream" sparkle:edSignature="iYLoAGAT64TjW1jFEgNkAhQfEBl6nwJFRLao6O8wtad92M+uyJhZku8XWA+nSOqRIDdmy3lFtw5JJFZkrc+oCA=="/>
         </item>
         <item>
-            <title>0.5.0-rc.4</title>
-            <pubDate>Mon, 31 Aug 2026 14:26:19 +0000</pubDate>
-            <sparkle:channel>rc</sparkle:channel>
-            <sparkle:version>24</sparkle:version>
-            <sparkle:shortVersionString>0.5.0-rc.4</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/entrevoix-app/entrevoix-macos/releases/download/v0.5.0-rc.4/Entrevoix-0.5.0-rc.4-macos.dmg" length="4735808" type="application/octet-stream" sparkle:edSignature="x6Bfc3Lzk0Gz8fWucy/Px/of+LLexIMc1yuZImef7RvBnMnUttqxmpEAg50k8zehZmqb9e3CJ3hfZnAnlP0gAw=="/>
-        </item>
-        <item>
-            <title>0.5.0-rc.3</title>
-            <pubDate>Mon, 31 Aug 2026 12:51:08 +0000</pubDate>
-            <sparkle:channel>rc</sparkle:channel>
-            <sparkle:version>23</sparkle:version>
-            <sparkle:shortVersionString>0.5.0-rc.3</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/entrevoix-app/entrevoix-macos/releases/download/v0.5.0-rc.3/Entrevoix-0.5.0-rc.3-macos.dmg" length="4731290" type="application/octet-stream" sparkle:edSignature="PMJz6a9m38nKmNHqimkVf0bpml92DpDpdhCVHmp7mZ7Iw7ZYScbph7xinTUbRaNWFdQuqqZ2fxVqCyc+wh+mDA=="/>
-        </item>
-        <item>
             <title>0.5.0-dev.3</title>
             <pubDate>Wed, 26 Aug 2026 16:43:27 +0000</pubDate>
             <sparkle:channel>dev</sparkle:channel>
@@ -41,26 +30,6 @@
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <enclosure url="https://github.com/entrevoix-app/entrevoix-macos/releases/download/v0.5.0-dev.3/Entrevoix-0.5.0-dev.3-macos.dmg" length="4668227" type="application/octet-stream" sparkle:edSignature="WlxAup3Wv2E7KTYzxVrhBYLoMIJQDjKgkmbnaPMzf/FrLpheRms+3a4hMT0eqxtx4Dke8BwSIAk/HAECXd1KCA=="/>
-        </item>
-        <item>
-            <title>0.5.0-dev.2</title>
-            <pubDate>Tue, 25 Aug 2026 10:16:09 +0000</pubDate>
-            <sparkle:channel>dev</sparkle:channel>
-            <sparkle:version>19</sparkle:version>
-            <sparkle:shortVersionString>0.5.0-dev.2</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/entrevoix-app/entrevoix-macos/releases/download/v0.5.0-dev.2/Entrevoix-0.5.0-dev.2-macos.dmg" length="4581954" type="application/octet-stream" sparkle:edSignature="ELti9k7tfjoGougFr7eYjvXreCJveu05hxugFoBbwvgO22RnQEuIw2ZZYK7eoiwEvkf1LwH2SKg1yG8bk4tiCA=="/>
-        </item>
-        <item>
-            <title>0.5.0-dev.1</title>
-            <pubDate>Mon, 24 Aug 2026 15:54:06 +0000</pubDate>
-            <sparkle:channel>dev</sparkle:channel>
-            <sparkle:version>18</sparkle:version>
-            <sparkle:shortVersionString>0.5.0-dev.1</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/entrevoix-app/entrevoix-macos/releases/download/v0.5.0-dev.1/Entrevoix-0.5.0-dev.1-macos.dmg" length="4564204" type="application/octet-stream" sparkle:edSignature="PqiIiFm3PkhDTm82p0+HsGquv+EE3pk7vDAlW0hvlIy/hkrD3WtA3Lu49JOLq2SKOWep/VcJzeUWS4P19Up1DQ=="/>
         </item>
         <item>
             <title>0.4.0</title>
@@ -79,15 +48,6 @@
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <enclosure url="https://github.com/entrevoix-app/entrevoix-macos/releases/download/v0.3.4/Entrevoix-0.3.4-macos.dmg" length="4458113" type="application/octet-stream" sparkle:edSignature="4iElt+Z8l7PhUFiAJ6RH2qdvAdLrCSLfKaw4aeSyyzYlayV3fmkqJjraoBAHQkb4V3EF1QsbY8P1XodKOubkCg=="/>
-        </item>
-        <item>
-            <title>0.3.3</title>
-            <pubDate>Wed, 19 Aug 2026 14:10:36 +0000</pubDate>
-            <sparkle:version>8</sparkle:version>
-            <sparkle:shortVersionString>0.3.3</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/entrevoix-app/entrevoix-macos/releases/download/v0.3.3/Entrevoix-0.3.3-macos.dmg" length="4104684" type="application/octet-stream" sparkle:edSignature="g/2NPcqt9W7ZY6kSqYbHMjnxtoG9omnTOxnx4EZvO+/VhJkks52byrCO6qj4IZkV84qRlSyekU/duqDgIkrJCg=="/>
         </item>
     </channel>
 </rss>
