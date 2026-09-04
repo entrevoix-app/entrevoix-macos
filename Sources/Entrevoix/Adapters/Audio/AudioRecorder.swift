@@ -61,11 +61,18 @@ final class AudioRecorder: AudioRecording, AudioLevelProviding {
         at url: URL,
         input: AudioInputSelection
     ) throws {
-        let engine = try captureEngine(for: input)
+        let engine: any AudioCaptureEngine
+        do {
+            engine = try captureEngine(for: input)
+        } catch {
+            logger.log("Audio input selection failed (requested input; no fallback).")
+            throw error
+        }
         let inputFormat = engine.inputFormat
-        guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
+        guard Self.isSupportedCaptureFormat(inputFormat) else {
             engine.discard()
             preparedEngine = nil
+            logger.log("Audio input selection failed (requested input; unsupported source format).")
             throw RecorderError.couldNotStart
         }
 
@@ -75,12 +82,34 @@ final class AudioRecorder: AudioRecording, AudioLevelProviding {
             activeEngine = engine
             captureWriter = writer
             currentURL = url
+            logger.log("Audio input selection succeeded (requested input; source \(Self.formatDiagnostic(inputFormat))).")
         } catch {
             engine.discard()
             preparedEngine = nil
             try? FileManager.default.removeItem(at: url)
+            logger.log("Audio input capture failed (requested input; source \(Self.formatDiagnostic(inputFormat))).")
             throw error
         }
+    }
+
+    private static func isSupportedCaptureFormat(_ format: AVAudioFormat) -> Bool {
+        guard format.sampleRate > 0,
+              format.channelCount > 0,
+              format.streamDescription.pointee.mFormatID == kAudioFormatLinearPCM,
+              let floatFormat = AVAudioFormat(
+                  commonFormat: .pcmFormatFloat32,
+                  sampleRate: format.sampleRate,
+                  channels: format.channelCount,
+                  interleaved: false
+              ) else {
+            return false
+        }
+        return AVAudioConverter(from: format, to: floatFormat) != nil
+    }
+
+    private static func formatDiagnostic(_ format: AVAudioFormat) -> String {
+        let encoding = format.commonFormat == .pcmFormatFloat32 ? "float32" : "linear-pcm"
+        return "rate=\(Int(format.sampleRate)) channels=\(format.channelCount) encoding=\(encoding)"
     }
 
     /// Keep only the selected input's prepared engine to avoid startup latency.
@@ -349,25 +378,42 @@ final class HALInputCaptureEngine: AudioCaptureEngine {
             &size
         ))
         guard deviceFormat.mSampleRate > 0, deviceFormat.mChannelsPerFrame > 0,
-              let format = AVAudioFormat(
-                  commonFormat: .pcmFormatFloat32,
-                  sampleRate: deviceFormat.mSampleRate,
-                  channels: deviceFormat.mChannelsPerFrame,
-                  interleaved: false
-              ) else {
+              let floatFormat = AVAudioFormat(
+                   commonFormat: .pcmFormatFloat32,
+                   sampleRate: deviceFormat.mSampleRate,
+                   channels: deviceFormat.mChannelsPerFrame,
+                   interleaved: false
+               ) else {
             throw RecorderError.couldNotStart
         }
 
-        var clientDescription = format.streamDescription.pointee
-        try check(AudioUnitSetProperty(
+        var clientDescription = floatFormat.streamDescription.pointee
+        let status = AudioUnitSetProperty(
             audioUnit,
             kAudioUnitProperty_StreamFormat,
             kAudioUnitScope_Output,
             1,
             &clientDescription,
             UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        )
+        if status == noErr {
+            return floatFormat
+        }
+
+        guard let nativeFormat = AVAudioFormat(streamDescription: &deviceFormat),
+              nativeFormat.streamDescription.pointee.mFormatID == kAudioFormatLinearPCM else {
+            throw RecorderError.couldNotStart
+        }
+        var nativeDescription = deviceFormat
+        try check(AudioUnitSetProperty(
+            audioUnit,
+            kAudioUnitProperty_StreamFormat,
+            kAudioUnitScope_Output,
+            1,
+            &nativeDescription,
+            UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
         ))
-        return format
+        return nativeFormat
     }
 
     private nonisolated static func installInputCallback(
@@ -597,16 +643,20 @@ private final class HALInputCaptureContext: @unchecked Sendable {
     ) -> Bool {
         let destinationOffset = destination.frameLength
         guard destination.frameCapacity - destinationOffset >= frameCount,
-              let sourceChannels = source.floatChannelData,
-              let destinationChannels = destination.floatChannelData,
-              source.format.channelCount == destination.format.channelCount else {
+              source.format == destination.format else {
             return false
         }
-        let byteCount = Int(frameCount) * MemoryLayout<Float>.stride
-        for channel in 0..<Int(source.format.channelCount) {
+        let sourceBuffers = UnsafeMutableAudioBufferListPointer(source.mutableAudioBufferList)
+        let destinationBuffers = UnsafeMutableAudioBufferListPointer(destination.mutableAudioBufferList)
+        guard sourceBuffers.count == destinationBuffers.count else { return false }
+        let byteCount = Int(frameCount) * Int(source.format.streamDescription.pointee.mBytesPerFrame)
+        for (sourceBuffer, destinationBuffer) in zip(sourceBuffers, destinationBuffers) {
+            guard let sourceData = sourceBuffer.mData, let destinationData = destinationBuffer.mData else {
+                return false
+            }
             memcpy(
-                destinationChannels[channel].advanced(by: Int(destinationOffset)),
-                sourceChannels[channel],
+                destinationData.advanced(by: Int(destinationOffset) * Int(destination.format.streamDescription.pointee.mBytesPerFrame)),
+                sourceData,
                 byteCount
             )
         }
@@ -709,6 +759,8 @@ final class AudioCaptureWriter: Sendable {
     }
 
     private struct State {
+        let inputConverter: AVAudioConverter?
+        let floatInputFormat: AVAudioFormat
         let converter: AVAudioConverter
         let converterInputFormat: AVAudioFormat
         let file: AVAudioFile
@@ -727,6 +779,30 @@ final class AudioCaptureWriter: Sendable {
     private let pendingWrites = DispatchGroup()
 
     init(inputFormat: AVAudioFormat, outputURL: URL) throws {
+        guard inputFormat.sampleRate > 0,
+              inputFormat.channelCount > 0,
+              inputFormat.streamDescription.pointee.mFormatID == kAudioFormatLinearPCM else {
+            throw RecorderError.couldNotStart
+        }
+
+        let floatInputFormat: AVAudioFormat
+        let inputConverter: AVAudioConverter?
+        if inputFormat.commonFormat == .pcmFormatFloat32, !inputFormat.isInterleaved {
+            floatInputFormat = inputFormat
+            inputConverter = nil
+        } else {
+            guard let format = AVAudioFormat(
+                commonFormat: .pcmFormatFloat32,
+                sampleRate: inputFormat.sampleRate,
+                channels: inputFormat.channelCount,
+                interleaved: false
+            ), let converter = AVAudioConverter(from: inputFormat, to: format) else {
+                throw RecorderError.couldNotStart
+            }
+            floatInputFormat = format
+            inputConverter = converter
+        }
+
         guard let converterInputFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
             sampleRate: inputFormat.sampleRate,
@@ -748,6 +824,8 @@ final class AudioCaptureWriter: Sendable {
             interleaved: true
         )
         state = Mutex(State(
+            inputConverter: inputConverter,
+            floatInputFormat: floatInputFormat,
             converter: converter,
             converterInputFormat: converterInputFormat,
             file: file,
@@ -777,15 +855,19 @@ final class AudioCaptureWriter: Sendable {
     func append(_ input: AVAudioPCMBuffer) {
         state.withLock { state in
             guard !state.isFinished, !state.didFail else { return }
-            state.averagePower = Self.averagePower(for: input)
 
-            guard let monoInput = Self.downmixToMono(
-                input,
+            guard let floatInput = Self.floatBuffer(
+                from: input,
+                converter: state.inputConverter,
+                format: state.floatInputFormat
+            ), let monoInput = Self.downmixToMono(
+                floatInput,
                 format: state.converterInputFormat
             ) else {
                 state.didFail = true
                 return
             }
+            state.averagePower = Self.averagePower(for: floatInput)
 
             let convertedFrameCount = max(
                 Int(monoInput.frameLength),
@@ -856,6 +938,24 @@ final class AudioCaptureWriter: Sendable {
             }
             outputSamples[frame] = mixedSample * scale
         }
+        return output
+    }
+
+    private static func floatBuffer(
+        from input: AVAudioPCMBuffer,
+        converter: AVAudioConverter?,
+        format: AVAudioFormat
+    ) -> AVAudioPCMBuffer? {
+        guard let converter else { return input }
+        guard let output = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: input.frameLength) else {
+            return nil
+        }
+        let source = ConverterInputBlockSource(input)
+        var error: NSError?
+        let status = converter.convert(to: output, error: &error) { _, inputStatus in
+            source.next(into: inputStatus)
+        }
+        guard error == nil, status != .error, output.frameLength > 0 else { return nil }
         return output
     }
 

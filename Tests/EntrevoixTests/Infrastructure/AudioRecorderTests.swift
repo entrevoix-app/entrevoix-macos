@@ -1,4 +1,5 @@
 import AVFoundation
+import AudioToolbox
 import CoreMedia
 @testable import EntrevoixAppleAdapters
 import EntrevoixCore
@@ -165,7 +166,6 @@ final class AudioRecorderTests: XCTestCase {
         }
 
         let url = try appTemporaryFile()
-        try FileManager.default.removeItem(at: url)
         defer { try? FileManager.default.removeItem(at: url) }
         let writer = try AudioCaptureWriter(inputFormat: inputFormat, outputURL: url)
 
@@ -183,6 +183,215 @@ final class AudioRecorderTests: XCTestCase {
             max(maximum, abs(samples[frame]))
         }
         XCTAssertGreaterThan(maximum, 0.01)
+    }
+
+    func testCaptureWriterNormalizesNativeBluetoothInt16AndFloatSourcesToRequiredWAVFormat() throws {
+        let int16Source = try makeInt16Buffer(sampleRate: 24_000)
+        let int16URL = try appTemporaryFile()
+        try FileManager.default.removeItem(at: int16URL)
+        defer { try? FileManager.default.removeItem(at: int16URL) }
+        let int16Writer = try AudioCaptureWriter(inputFormat: int16Source.format, outputURL: int16URL)
+
+        int16Writer.append(int16Source)
+
+        XCTAssertEqual(int16Writer.finish(), .success)
+        try assertRequiredWAVFormat(at: int16URL)
+
+        let floatSource = try makeFloatBuffer(sampleRate: 48_000)
+        let floatURL = try appTemporaryFile()
+        try FileManager.default.removeItem(at: floatURL)
+        defer { try? FileManager.default.removeItem(at: floatURL) }
+        let floatWriter = try AudioCaptureWriter(inputFormat: floatSource.format, outputURL: floatURL)
+
+        floatWriter.append(floatSource)
+
+        XCTAssertEqual(floatWriter.finish(), .success)
+        try assertRequiredWAVFormat(at: floatURL)
+    }
+
+    func testRecorderAcceptsSigned24BitLittleEndianInterleavedPCMAndNormalizesItToRequiredWAV() throws {
+        let buffer = try makePCMBuffer(
+            sampleRate: 48_000,
+            channels: 2,
+            bitsPerChannel: 24,
+            formatFlags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked,
+            interleaved: true,
+            bytes: [0x00, 0x00, 0x40, 0x00, 0x00, 0x40]
+        )
+
+        try assertRecorderNormalizesNativeCapture(buffer)
+    }
+
+    func testRecorderAcceptsUnsigned8BitPCMAndNormalizesItToRequiredWAV() throws {
+        let buffer = try makePCMBuffer(
+            sampleRate: 22_050,
+            channels: 1,
+            bitsPerChannel: 8,
+            formatFlags: kAudioFormatFlagIsPacked,
+            interleaved: true,
+            bytes: [0xE0]
+        )
+
+        try assertRecorderNormalizesNativeCapture(buffer)
+    }
+
+    func testRecorderAcceptsSigned32BitBigEndianNonInterleavedPCMAndNormalizesItToRequiredWAV() throws {
+        let buffer = try makePCMBuffer(
+            sampleRate: 44_100,
+            channels: 2,
+            bitsPerChannel: 32,
+            formatFlags: kAudioFormatFlagIsSignedInteger
+                | kAudioFormatFlagIsPacked
+                | kAudioFormatFlagIsBigEndian
+                | kAudioFormatFlagIsNonInterleaved,
+            interleaved: false,
+            bytes: [0x40, 0x00, 0x00, 0x00]
+        )
+
+        try assertRecorderNormalizesNativeCapture(buffer)
+    }
+
+    func testRecorderRejectsInvalidNativeFormatsWithoutPartialWAVOrSystemDefaultFallback() throws {
+        let selectedInput = AudioInputDeviceReference(uid: "dji-mini-input", name: "DJI Mini")
+        let invalidRateAndChannelEngine = AudioCaptureEngineSpy(inputFormat: AVAudioFormat())
+        let recorder = AudioRecorder(
+            logger: AppLogStore(),
+            captureEngineFactory: AudioCaptureEngineFactorySpy(engines: [invalidRateAndChannelEngine])
+        )
+
+        XCTAssertThrowsError(try recorder.start(input: .device(selectedInput))) { error in
+            guard case RecorderError.couldNotStart = error else {
+                return XCTFail("Expected invalid rate or channel count to be rejected as couldNotStart.")
+            }
+        }
+        XCTAssertNil(recorder.currentURL)
+        XCTAssertEqual(invalidRateAndChannelEngine.configuredInputs, [.device(selectedInput)])
+        recorder.cancel()
+    }
+
+    func testRecorderRejectsNonPCMNativeFormatWithoutStartingCapture() throws {
+        let format = try makeAudioFormat(
+            formatID: kAudioFormatMPEG4AAC,
+            formatFlags: 0,
+            bitsPerChannel: 0,
+            bytesPerFrame: 0
+        )
+        let engine = AudioCaptureEngineSpy(inputFormat: format)
+        let recorder = AudioRecorder(
+            logger: AppLogStore(),
+            captureEngineFactory: AudioCaptureEngineFactorySpy(engines: [engine])
+        )
+
+        XCTAssertThrowsError(try recorder.start(input: .systemDefault))
+
+        XCTAssertNil(recorder.currentURL)
+        XCTAssertEqual(engine.startCaptureCount, 0)
+        XCTAssertEqual(engine.discardCount, 1)
+    }
+
+    func testRecorderRejectsNonconvertibleLinearPCMNativeFormatWithoutStartingCapture() throws {
+        let format = try makeAudioFormat(
+            formatID: kAudioFormatLinearPCM,
+            formatFlags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked,
+            bitsPerChannel: 12,
+            bytesPerFrame: 2
+        )
+        let floatFormat = try XCTUnwrap(AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: format.sampleRate,
+            channels: format.channelCount,
+            interleaved: false
+        ))
+        XCTAssertNil(AVAudioConverter(from: format, to: floatFormat))
+        let engine = AudioCaptureEngineSpy(inputFormat: format)
+        let recorder = AudioRecorder(
+            logger: AppLogStore(),
+            captureEngineFactory: AudioCaptureEngineFactorySpy(engines: [engine])
+        )
+
+        XCTAssertThrowsError(try recorder.start(input: .systemDefault))
+
+        XCTAssertNil(recorder.currentURL)
+        XCTAssertEqual(engine.startCaptureCount, 0)
+        XCTAssertEqual(engine.discardCount, 1)
+    }
+
+    func testExplicitUIDSelectionCapturesItsNativeInputAndMissingUIDNeverOpensSystemDefault() throws {
+        let selectedInput = AudioInputDeviceReference(uid: "dji-mini-input", name: "DJI Mini")
+        let selectedEngine = NativeFormatCaptureEngine(buffer: try makeInt16Buffer(sampleRate: 24_000))
+        let unavailableEngine = AudioCaptureEngineSpy(configureError: RecorderError.inputDeviceUnavailable)
+        let recorder = AudioRecorder(
+            logger: AppLogStore(),
+            captureEngineFactory: AudioCaptureEngineFactorySpy(engines: [selectedEngine, unavailableEngine])
+        )
+
+        try recorder.start(input: .device(selectedInput))
+        let captureURL = recorder.stop()
+
+        XCTAssertNotNil(captureURL)
+        if let captureURL {
+            defer { try? FileManager.default.removeItem(at: captureURL) }
+            try assertRequiredWAVFormat(at: captureURL)
+        }
+
+        let missingInput = AudioInputDeviceReference(uid: "missing-dji-mini", name: "Missing DJI Mini")
+        XCTAssertThrowsError(try recorder.start(input: .device(missingInput)))
+        XCTAssertEqual(unavailableEngine.configuredInputs, [.device(missingInput)])
+    }
+
+    func testSelectedDJIMiniUIDSurvivesNativeFormatChangesAndNormalizesEveryCapture() throws {
+        let selectedInput = AudioInputDeviceReference(uid: "dji-mini-input", name: "DJI Mini")
+        let engine = NativeFormatCaptureEngine(buffer: try makeInt16Buffer(sampleRate: 24_000))
+        let recorder = AudioRecorder(
+            logger: AppLogStore(),
+            captureEngineFactory: AudioCaptureEngineFactorySpy(engines: [engine])
+        )
+
+        try recorder.start(input: .device(selectedInput))
+        let int16URL = recorder.stop()
+        XCTAssertNotNil(int16URL)
+        if let int16URL {
+            defer { try? FileManager.default.removeItem(at: int16URL) }
+            try assertRequiredWAVFormat(at: int16URL)
+        }
+
+        engine.replaceNextCapture(with: try makeFloatBuffer(sampleRate: 48_000))
+        try recorder.start(input: .device(selectedInput))
+        let floatURL = recorder.stop()
+        XCTAssertNotNil(floatURL)
+        if let floatURL {
+            defer { try? FileManager.default.removeItem(at: floatURL) }
+            try assertRequiredWAVFormat(at: floatURL)
+        }
+        XCTAssertEqual(engine.configuredInputs, [.device(selectedInput)])
+    }
+
+    func testRecorderLogsOnlySafeSelectionAndNativeFormatDiagnosticsForSuccessAndFailure() throws {
+        let secretUID = "dji-mini-uid-SECRET-123"
+        let transcript = "private transcript"
+        let providerBody = #"{\"api_key\":\"secret\"}"#
+        let logger = LogWritingSpy()
+        let successfulEngine = AudioCaptureEngineSpy()
+        let failedEngine = AudioCaptureEngineSpy(configureError: RecorderError.inputDeviceUnavailable)
+        let recorder = AudioRecorder(
+            logger: logger,
+            captureEngineFactory: AudioCaptureEngineFactorySpy(engines: [successfulEngine, failedEngine])
+        )
+
+        try recorder.start(input: .device(AudioInputDeviceReference(uid: secretUID, name: "DJI Mini")))
+        recorder.cancel()
+        let unavailableUID = "missing-dji-mini-uid-SECRET-456"
+        XCTAssertThrowsError(try recorder.start(input: .device(AudioInputDeviceReference(uid: unavailableUID, name: "Missing DJI Mini"))))
+
+        let diagnostics = logger.messages.joined(separator: "\n")
+        XCTAssertTrue(diagnostics.localizedCaseInsensitiveContains("selection"))
+        XCTAssertTrue(diagnostics.contains("48000"))
+        XCTAssertTrue(diagnostics.localizedCaseInsensitiveContains("float"))
+        XCTAssertTrue(diagnostics.localizedCaseInsensitiveContains("failed"))
+        XCTAssertFalse(diagnostics.contains(secretUID))
+        XCTAssertFalse(diagnostics.contains(unavailableUID))
+        XCTAssertFalse(diagnostics.contains(transcript))
+        XCTAssertFalse(diagnostics.contains(providerBody))
     }
 
     func testSpeechTrimBoundsKeepTwoHundredMillisecondsOfPaddingAndRewriteWAV() throws {
@@ -221,6 +430,135 @@ final class AudioRecorderTests: XCTestCase {
         XCTAssertEqual(trimmed.fileFormat.channelCount, 1)
         XCTAssertEqual(trimmed.length, 17_600)
         XCTAssertFalse(FileManager.default.fileExists(atPath: sourceURL.path))
+    }
+
+    private func makeInt16Buffer(sampleRate: Double) throws -> AVAudioPCMBuffer {
+        let format = try XCTUnwrap(AVAudioFormat(
+            commonFormat: .pcmFormatInt16,
+            sampleRate: sampleRate,
+            channels: 1,
+            interleaved: false
+        ))
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 240))
+        buffer.frameLength = 240
+        let samples = try XCTUnwrap(buffer.int16ChannelData?.pointee)
+        for frame in 0..<240 {
+            samples[frame] = 8_192
+        }
+        return buffer
+    }
+
+    private func makeFloatBuffer(sampleRate: Double) throws -> AVAudioPCMBuffer {
+        let format = try XCTUnwrap(AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: sampleRate,
+            channels: 1,
+            interleaved: false
+        ))
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 480))
+        buffer.frameLength = 480
+        let samples = try XCTUnwrap(buffer.floatChannelData?.pointee)
+        for frame in 0..<480 {
+            samples[frame] = 0.25
+        }
+        return buffer
+    }
+
+    private func makePCMBuffer(
+        sampleRate: Double,
+        channels: UInt32,
+        bitsPerChannel: UInt32,
+        formatFlags: UInt32,
+        interleaved: Bool,
+        bytes: [UInt8]
+    ) throws -> AVAudioPCMBuffer {
+        let bytesPerSample = bitsPerChannel / 8
+        var description = AudioStreamBasicDescription(
+            mSampleRate: sampleRate,
+            mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: formatFlags,
+            mBytesPerPacket: interleaved ? bytesPerSample * channels : bytesPerSample,
+            mFramesPerPacket: 1,
+            mBytesPerFrame: interleaved ? bytesPerSample * channels : bytesPerSample,
+            mChannelsPerFrame: channels,
+            mBitsPerChannel: bitsPerChannel,
+            mReserved: 0
+        )
+        let format = try XCTUnwrap(AVAudioFormat(streamDescription: &description))
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 480))
+        buffer.frameLength = 480
+
+        for audioBuffer in UnsafeMutableAudioBufferListPointer(buffer.mutableAudioBufferList) {
+            let destination = try XCTUnwrap(audioBuffer.mData)
+            let sampleCount = Int(audioBuffer.mDataByteSize) / bytes.count
+            for sample in 0..<sampleCount {
+                bytes.withUnsafeBytes { source in
+                    destination.advanced(by: sample * bytes.count).copyMemory(
+                        from: source.baseAddress!,
+                        byteCount: bytes.count
+                    )
+                }
+            }
+        }
+        return buffer
+    }
+
+    private func makeAudioFormat(
+        formatID: AudioFormatID,
+        formatFlags: UInt32,
+        bitsPerChannel: UInt32,
+        bytesPerFrame: UInt32
+    ) throws -> AVAudioFormat {
+        var description = AudioStreamBasicDescription(
+            mSampleRate: 48_000,
+            mFormatID: formatID,
+            mFormatFlags: formatFlags,
+            mBytesPerPacket: bytesPerFrame,
+            mFramesPerPacket: 1,
+            mBytesPerFrame: bytesPerFrame,
+            mChannelsPerFrame: 1,
+            mBitsPerChannel: bitsPerChannel,
+            mReserved: 0
+        )
+        return try XCTUnwrap(AVAudioFormat(streamDescription: &description))
+    }
+
+    private func assertRecorderNormalizesNativeCapture(_ buffer: AVAudioPCMBuffer) throws {
+        let engine = NativeFormatCaptureEngine(buffer: buffer)
+        let recorder = AudioRecorder(
+            logger: AppLogStore(),
+            captureEngineFactory: AudioCaptureEngineFactorySpy(engines: [engine])
+        )
+
+        try recorder.start(input: .systemDefault)
+        let captureURL = try XCTUnwrap(recorder.stop())
+        defer { try? FileManager.default.removeItem(at: captureURL) }
+        try assertRequiredWAVFormat(at: captureURL)
+
+        let file = try AVAudioFile(forReading: captureURL)
+        let output = try XCTUnwrap(AVAudioPCMBuffer(
+            pcmFormat: file.processingFormat,
+            frameCapacity: AVAudioFrameCount(file.length)
+        ))
+        try file.read(into: output)
+        let samples = try XCTUnwrap(output.floatChannelData?.pointee)
+        let peak = (0..<Int(output.frameLength)).reduce(Float.zero) { peak, frame in
+            max(peak, abs(samples[frame]))
+        }
+        XCTAssertGreaterThan(peak, 0.01)
+    }
+
+    private func assertRequiredWAVFormat(at url: URL) throws {
+        let file = try AVAudioFile(forReading: url)
+        let description = file.fileFormat.streamDescription.pointee
+
+        XCTAssertEqual(file.fileFormat.sampleRate, 16_000)
+        XCTAssertEqual(file.fileFormat.channelCount, 1)
+        XCTAssertEqual(description.mFormatID, kAudioFormatLinearPCM)
+        XCTAssertEqual(description.mBitsPerChannel, 16)
+        XCTAssertEqual(description.mBytesPerFrame, 2)
+        XCTAssertEqual(description.mFormatFlags & kAudioFormatFlagIsNonInterleaved, 0)
+        XCTAssertGreaterThan(file.length, 0)
     }
 
     func testSpeechTrimReducesOnlyInternalPausesLongerThanOneSecond() throws {
@@ -266,10 +604,10 @@ final class AudioRecorderTests: XCTestCase {
 
 @MainActor
 private final class AudioCaptureEngineFactorySpy: AudioCaptureEngineFactory {
-    private var engines: [AudioCaptureEngineSpy]
+    private var engines: [any AudioCaptureEngine]
     private(set) var makeCount = 0
 
-    init(engines: [AudioCaptureEngineSpy]) {
+    init(engines: [any AudioCaptureEngine]) {
         self.engines = engines
     }
 
@@ -331,5 +669,42 @@ private final class AudioCaptureEngineSpy: AudioCaptureEngine {
 
     func discard() {
         discardCount += 1
+    }
+}
+
+@MainActor
+private final class NativeFormatCaptureEngine: AudioCaptureEngine {
+    private var nextCapture: AVAudioPCMBuffer
+    private(set) var configuredInputs: [AudioInputSelection] = []
+
+    init(buffer: AVAudioPCMBuffer) {
+        nextCapture = buffer
+    }
+
+    var inputFormat: AVAudioFormat { nextCapture.format }
+
+    func configure(input: AudioInputSelection) throws {
+        configuredInputs.append(input)
+    }
+
+    func startCapture(writer: AudioCaptureWriter) throws {
+        writer.append(nextCapture)
+    }
+
+    func pauseCapture() {}
+
+    func discard() {}
+
+    func replaceNextCapture(with buffer: AVAudioPCMBuffer) {
+        nextCapture = buffer
+    }
+}
+
+@MainActor
+private final class LogWritingSpy: LogWriting {
+    private(set) var messages: [String] = []
+
+    func log(_ message: String) {
+        messages.append(message)
     }
 }
