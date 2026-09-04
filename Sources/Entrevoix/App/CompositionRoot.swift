@@ -20,14 +20,17 @@ enum CompositionRoot {
         let preferencesStore = UserDefaultsPreferencesStore()
         var loadedPreferences: AppPreferences
         let recovered: Bool
+        let initialPreferencesAreFresh: Bool
 
         switch preferencesStore.load() {
         case .loaded(let preferences):
             loadedPreferences = preferences
             recovered = false
+            initialPreferencesAreFresh = preferencesStore.didLoadFreshPreferences
         case .recovered(let preferences):
             loadedPreferences = preferences
             recovered = true
+            initialPreferencesAreFresh = false
         case .incompatible(let schemaVersion):
             return .incompatible(
                 schemaVersion: schemaVersion,
@@ -51,7 +54,8 @@ enum CompositionRoot {
             makeEnvironment(
                 preferencesStore: preferencesStore,
                 initialPreferences: loadedPreferences,
-                updater: updater
+                updater: updater,
+                initialPreferencesAreFresh: initialPreferencesAreFresh
             ),
             recoveredPreferences: recovered
         )
@@ -60,7 +64,8 @@ enum CompositionRoot {
     static func makeEnvironment(
         preferencesStore: any PreferencesStoring,
         initialPreferences: AppPreferences,
-        updater: any ApplicationUpdating = SparkleUpdateService()
+        updater: any ApplicationUpdating = SparkleUpdateService(),
+        initialPreferencesAreFresh: Bool = false
     ) -> AppEnvironment {
         let audioInputDevices = CoreAudioInputDeviceCatalog()
         let logStore = AppLogStore()
@@ -146,7 +151,7 @@ enum CompositionRoot {
             dictationDictionaryCloudSync: DictationDictionaryCloudSync(),
             logStore: logStore,
             now: Date.init
-        ), initialPreferences: initialPreferences)
+        ), initialPreferences: initialPreferences, initialPreferencesAreFresh: initialPreferencesAreFresh)
         return AppEnvironment(appStore: appStore)
     }
 }

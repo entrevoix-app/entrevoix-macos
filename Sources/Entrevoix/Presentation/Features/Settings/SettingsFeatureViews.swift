@@ -452,6 +452,7 @@ struct DictationDictionaryView: View {
                     systemImage: "textformat.abc"
                 )
                 .listRowInsets(EdgeInsets())
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             } else {
                 ForEach(filteredTerms, id: \.self) { term in
                     if editingTerm == term {

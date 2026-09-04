@@ -8,6 +8,7 @@ public final class UserDefaultsPreferencesStore: PreferencesStoring {
     private let fileManager: FileManager
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    public private(set) var didLoadFreshPreferences = false
 
     public init(
         defaults: UserDefaults = .standard,
@@ -24,7 +25,9 @@ public final class UserDefaultsPreferencesStore: PreferencesStoring {
     }
 
     public func load() -> PreferencesLoadResult {
+        didLoadFreshPreferences = false
         guard let data = defaults.data(forKey: key) else {
+            didLoadFreshPreferences = true
             return .loaded(AppPreferences())
         }
 

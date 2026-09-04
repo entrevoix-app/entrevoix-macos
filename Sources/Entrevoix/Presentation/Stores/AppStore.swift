@@ -232,7 +232,11 @@ final class AppStore {
 
     var cleanupPromptForDisplay: String { activeCleanupPrompt?.instructions ?? "" }
 
-    init(dependencies: AppStoreDependencies, initialPreferences: AppPreferences) {
+    init(
+        dependencies: AppStoreDependencies,
+        initialPreferences: AppPreferences,
+        initialPreferencesAreFresh: Bool = false
+    ) {
         logStore = dependencies.logStore
         let preferencesModel = PreferencesStore(
             preferencesStore: dependencies.preferencesStore,
@@ -253,7 +257,8 @@ final class AppStore {
             codexCredentialsStore: dependencies.codexCredentials,
             codexAuthenticator: dependencies.codexAuthenticator,
             audioCaptureTrimmingResources: dependencies.audioCaptureTrimmingResources,
-            logStore: dependencies.logStore
+            logStore: dependencies.logStore,
+            initialPreferencesAreFresh: initialPreferencesAreFresh
         )
         self.providerStore = providerStore
         let permissionsModel = PermissionsStore(provider: dependencies.permissions)
