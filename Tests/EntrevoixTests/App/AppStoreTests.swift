@@ -267,6 +267,22 @@ final class AppStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testExistingPreferencesDoNotDownloadTheLocalSpeechResourceByDefault() async {
+        let resources = AppAudioCaptureTrimmingResourceManagerSpy(state: .downloadRequired)
+        let context = makeContext(
+            preferences: AppPreferences(providerCatalog: [.apple]),
+            audioCaptureTrimmingResources: resources,
+        )
+
+        await appWaitUntil("existing audio trimming resource status") {
+            context.model.audioCaptureTrimmingResourceState == .downloadRequired
+        }
+
+        let downloads = await resources.downloadLocales
+        XCTAssertTrue(downloads.isEmpty)
+    }
+
+    @MainActor
     func testActiveSTTLanguageCannotBeRemovedFromFavorites() {
         var preferences = AppPreferences()
         preferences.sttLanguage = .french

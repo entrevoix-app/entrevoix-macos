@@ -43,7 +43,7 @@ public struct AppPreferences: Codable, Equatable, Sendable {
         dictationDictionary: [String] = [],
         audioInputSelection: AudioInputSelection = .systemDefault,
         trimLeadingAndTrailingSilence: Bool = true,
-        reduceLongInternalPauses: Bool = false,
+        reduceLongInternalPauses: Bool = true,
         triggerMode: TriggerMode = .pushToTalk,
         cleanupEnabled: Bool = false,
         cleanupPrompt: String = AppPreferences.defaultCleanupPrompt,

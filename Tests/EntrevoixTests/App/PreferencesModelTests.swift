@@ -70,6 +70,23 @@ final class PreferencesStoreTests: XCTestCase {
         XCTAssertEqual(model.persistenceError, .keychainSaveFailed)
         XCTAssertFalse(String(describing: model.persistenceError).contains("super-secret"))
     }
+
+    func testFreshPreferencesEnableAudioProcessingAndPreserveExistingAudioChoices() throws {
+        let fresh = AppPreferences()
+        XCTAssertTrue(fresh.trimLeadingAndTrailingSilence)
+        XCTAssertTrue(fresh.reduceLongInternalPauses)
+
+        let existing = AppPreferences(
+            schemaVersion: AppPreferences.currentSchemaVersion,
+            trimLeadingAndTrailingSilence: false,
+            reduceLongInternalPauses: false
+        )
+        let restored = try JSONDecoder().decode(AppPreferences.self, from: JSONEncoder().encode(existing))
+
+        XCTAssertEqual(restored.schemaVersion, existing.schemaVersion)
+        XCTAssertFalse(restored.trimLeadingAndTrailingSilence)
+        XCTAssertFalse(restored.reduceLongInternalPauses)
+    }
 }
 
 private func configuredPreferences() -> AppPreferences {

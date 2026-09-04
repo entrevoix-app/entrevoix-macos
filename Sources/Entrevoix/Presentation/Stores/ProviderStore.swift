@@ -12,6 +12,7 @@ final class ProviderStore {
     private let codexAuthenticator: any CodexAuthenticating
     private let audioCaptureTrimmingResources: any AudioCaptureTrimmingResourceManaging
     private let logStore: AppLogStore
+    private let initialPreferencesAreFresh: Bool
 
     private(set) var discoveredModels: [UUID: [String]] = [:]
     private(set) var modelDiscoveryErrors: [UUID: String] = [:]
@@ -32,7 +33,8 @@ final class ProviderStore {
         codexCredentialsStore: any CodexCredentialsStoring,
         codexAuthenticator: any CodexAuthenticating,
         audioCaptureTrimmingResources: any AudioCaptureTrimmingResourceManaging,
-        logStore: AppLogStore
+        logStore: AppLogStore,
+        initialPreferencesAreFresh: Bool
     ) {
         self.preferencesStore = preferencesStore
         self.modelCatalog = modelCatalog
@@ -40,8 +42,12 @@ final class ProviderStore {
         self.codexAuthenticator = codexAuthenticator
         self.audioCaptureTrimmingResources = audioCaptureTrimmingResources
         self.logStore = logStore
+        self.initialPreferencesAreFresh = initialPreferencesAreFresh
         refreshCodexConnectionState()
         refreshAudioCaptureTrimmingResourceState()
+        if initialPreferencesAreFresh && preferences.trimLeadingAndTrailingSilence && preferences.reduceLongInternalPauses {
+            downloadAudioCaptureTrimmingResource()
+        }
     }
 
     var preferences: AppPreferences {
