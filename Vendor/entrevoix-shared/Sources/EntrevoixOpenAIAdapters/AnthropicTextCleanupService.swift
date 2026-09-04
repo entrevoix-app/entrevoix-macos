@@ -53,7 +53,7 @@ public struct AnthropicTextCleanupService: TextCleaning {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { throw AnthropicCleanupError.missingAPIKey }
 
-        let instructions = CleanupTransformationPolicy.systemInstructions
+        let instructions = CleanupTransformationPolicy.systemInstructions(language: language)
         let input = CleanupTransformationPolicy.input(instructions: cleanupPolicy, transcript: text)
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"

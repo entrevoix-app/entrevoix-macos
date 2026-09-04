@@ -5,6 +5,13 @@ import EntrevoixCore
 public struct AppleFoundationCleanupService: TextCleaning {
     public init() {}
 
+    static func instructions(for request: CleanupRequest) -> String {
+        guard case let .apple(localeIdentifier) = request.target else {
+            return CleanupTransformationPolicy.systemInstructions
+        }
+        return CleanupTransformationPolicy.systemInstructions(language: localeIdentifier)
+    }
+
     public func preflight(request: CleanupRequest) async throws {
         guard case .apple(let localeIdentifier) = request.target else { return }
         let model = SystemLanguageModel.default
@@ -24,7 +31,7 @@ public struct AppleFoundationCleanupService: TextCleaning {
     public func clean(text: String, request: CleanupRequest) async throws -> String {
         try await preflight(request: request)
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw AppleProviderError(capability: .ttt, reason: .missingConfiguration) }
-        let instructions = CleanupTransformationPolicy.systemInstructions
+        let instructions = Self.instructions(for: request)
         let input = CleanupTransformationPolicy.input(instructions: request.prompt, transcript: text)
         let model = SystemLanguageModel(useCase: .general, guardrails: .permissiveContentTransformations)
         let session = LanguageModelSession(model: model, instructions: instructions)
