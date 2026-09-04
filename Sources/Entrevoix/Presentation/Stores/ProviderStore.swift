@@ -104,12 +104,18 @@ final class ProviderStore {
     func addAppleProvider() {
         guard preferences.provider(for: .apple) == nil else { return }
         preferences.providerCatalog.append(.apple)
+        if initialPreferencesAreFresh && preferences.selectedSTTProviderID == nil {
+            preferences.selectedSTTProviderID = .apple
+        }
         preferencesStore.savePreferencesImmediately()
     }
 
     func addCodexProvider() {
         guard preferences.provider(for: .codex) == nil else { return }
         preferences.providerCatalog.append(.codex(CodexProviderProfile()))
+        if initialPreferencesAreFresh && preferences.selectedTTTProviderID == nil {
+            preferences.selectedTTTProviderID = .codex
+        }
         preferencesStore.savePreferencesImmediately()
     }
 
@@ -190,10 +196,25 @@ final class ProviderStore {
             preferences.providerCatalog[index] = .remote(draft)
         } else {
             preferences.providerCatalog.append(.remote(draft))
+            selectFirstProviderCapabilities()
         }
         preferencesStore.setAPIKey(apiKey, for: .remote(draft.id), to: .immediate)
         preferencesStore.savePreferencesImmediately()
         return []
+    }
+
+    private func selectFirstProviderCapabilities() {
+        guard initialPreferencesAreFresh else { return }
+        if preferences.selectedSTTProviderID == nil {
+            preferences.selectedSTTProviderID = preferences.providerCatalog.first(where: {
+                $0.remoteProfile?.stt != nil
+            })?.id
+        }
+        if preferences.selectedTTTProviderID == nil {
+            preferences.selectedTTTProviderID = preferences.providerCatalog.first(where: {
+                $0.remoteProfile?.ttt != nil
+            })?.id
+        }
     }
 
     @discardableResult

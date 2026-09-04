@@ -267,6 +267,21 @@ final class AppStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testFreshPreferencesDownloadTheLocalSpeechResourceByDefault() async {
+        let resources = AppAudioCaptureTrimmingResourceManagerSpy(state: .downloadRequired)
+        let context = makeContext(
+            audioCaptureTrimmingResources: resources,
+            preservesEmptyProviderCatalog: true
+        )
+
+        await appWaitUntil("default audio trimming resource download") {
+            context.model.audioCaptureTrimmingResourceState == .ready
+        }
+
+        XCTAssertEqual(context.model.audioCaptureTrimmingResourceState, .ready)
+    }
+
+    @MainActor
     func testExistingPreferencesDoNotDownloadTheLocalSpeechResourceByDefault() async {
         let resources = AppAudioCaptureTrimmingResourceManagerSpy(state: .downloadRequired)
         let context = makeContext(
@@ -280,6 +295,55 @@ final class AppStoreTests: XCTestCase {
 
         let downloads = await resources.downloadLocales
         XCTAssertTrue(downloads.isEmpty)
+    }
+
+    @MainActor
+    func testFirstProvidersAutoSelectEachCapabilityWithoutReplacingExistingSelections() {
+        let fresh = makeContext(
+            preferences: AppPreferences(interfaceLanguage: .english),
+            preservesEmptyProviderCatalog: true
+        )
+
+        fresh.model.addAppleProvider()
+        XCTAssertEqual(fresh.model.preferences.selectedSTTProviderID, .apple)
+        XCTAssertNil(fresh.model.preferences.selectedTTTProviderID)
+
+        fresh.model.addCodexProvider()
+        XCTAssertEqual(fresh.model.preferences.selectedSTTProviderID, .apple)
+        XCTAssertEqual(fresh.model.preferences.selectedTTTProviderID, .codex)
+
+        let second = fresh.model.newRemoteProvider(kind: .openAICompatible)
+        XCTAssertTrue(fresh.model.saveRemoteProvider(second, apiKey: "second-provider-key").isEmpty)
+        XCTAssertEqual(fresh.model.preferences.selectedSTTProviderID, .apple)
+        XCTAssertEqual(fresh.model.preferences.selectedTTTProviderID, .codex)
+
+        let existingPreferences = AppPreferences(
+            interfaceLanguage: .english,
+            providerCatalog: [.apple, .codex(CodexProviderProfile())]
+        )
+        let existing = makeContext(preferences: existingPreferences)
+        XCTAssertNil(existing.model.preferences.selectedSTTProviderID)
+        XCTAssertNil(existing.model.preferences.selectedTTTProviderID)
+    }
+
+    @MainActor
+    func testFreshProviderSelectionUsesFirstExistingCapableProvider() {
+        let first = RemoteProviderProfile.openAI()
+        let preferences = AppPreferences(
+            interfaceLanguage: .english,
+            providerCatalog: [.remote(first)]
+        )
+        let context = makeContext(
+            preferences: preferences,
+            preservesEmptyProviderCatalog: true,
+            initialPreferencesAreFresh: true
+        )
+        var second = context.model.newRemoteProvider(kind: .openAI)
+        second.name = "Second"
+
+        XCTAssertTrue(context.model.saveRemoteProvider(second, apiKey: "second-provider-key").isEmpty)
+        XCTAssertEqual(context.model.preferences.selectedSTTProviderID, .remote(first.id))
+        XCTAssertEqual(context.model.preferences.selectedTTTProviderID, .remote(first.id))
     }
 
     @MainActor
@@ -512,7 +576,8 @@ final class AppStoreTests: XCTestCase {
         let context = makeContext(
             recorder: recorder,
             preferences: AppPreferences(outputMode: .paste),
-            permissions: permissions
+            permissions: permissions,
+            preservesEmptyProviderCatalog: true
         )
 
         context.model.startRecording()
@@ -1230,9 +1295,11 @@ final class AppStoreTests: XCTestCase {
         codexCredentials: any CodexCredentialsStoring & CodexAccessTokenProviding = CodexCredentialStoreSpy(),
         codexAuthenticator: any CodexAuthenticating = CodexAuthenticatorSpy(),
         recordingRetentionPreferences: any RecordingRetentionPreferencesStoring = RecordingRetentionPreferencesStoreSpy(deleteAudioAfterTranscription: true),
-        recordingsFolderOpener: any RecordingsFolderOpening = RecordingsFolderOpenerSpy()
+        recordingsFolderOpener: any RecordingsFolderOpening = RecordingsFolderOpenerSpy(),
+        preservesEmptyProviderCatalog: Bool = false,
+        initialPreferencesAreFresh: Bool? = nil
     ) -> AppContext {
-        let preferences = configuredForExistingAppTests(preferences)
+        let preferences = preservesEmptyProviderCatalog ? preferences : configuredForExistingAppTests(preferences)
         let delivery = AppDeliverySpy()
         let logs = AppLogStore()
         let dependencies = DictationDependencies(
@@ -1290,7 +1357,7 @@ final class AppStoreTests: XCTestCase {
             ),
             logStore: logs,
             now: { clock.value }
-        ), initialPreferences: preferences)
+        ), initialPreferences: preferences, initialPreferencesAreFresh: initialPreferencesAreFresh ?? preservesEmptyProviderCatalog)
         return AppContext(
             model: model,
             delivery: delivery,
@@ -1316,6 +1383,9 @@ final class AppStoreTests: XCTestCase {
         ]
         value.selectedSTTProviderID = .remote(stt.id)
         value.selectedTTTProviderID = .remote(cleanup.id)
+        value.trimLeadingAndTrailingSilence = false
+        value.reduceLongInternalPauses = false
+        value.outputMode = .clipboard
         value.cleanupEnabled = true
         return value
     }
