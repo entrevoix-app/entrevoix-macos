@@ -311,6 +311,30 @@ final class AppStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testSelectingPromptRemainsAvailableWhenCleanupIsDisabled() throws {
+        let prompt = CleanupPrompt(name: "Writing", systemImageName: "quote.bubble", instructions: "Improve prose.")
+        let context = makeContext(preferences: AppPreferences(cleanupPrompts: [prompt]))
+        context.model.preferences.cleanupEnabled = false
+
+        let menuSource = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Sources/Entrevoix/Presentation/Features/MenuBar/MenuContent.swift"),
+            encoding: .utf8
+        )
+        guard menuSource.contains("if model.preferences.cleanupEnabled {") else {
+            return XCTFail("Prompt menu must hide selection controls while cleanup is disabled")
+        }
+
+        context.model.setActiveCleanupPrompt(prompt.id)
+
+        XCTAssertEqual(context.model.preferences.activeCleanupSelection, .prompt(prompt.id))
+    }
+
+    @MainActor
     func testPromptLibraryExportUsesTheCurrentPromptSnapshot() {
         let first = CleanupPrompt(name: "Writing", systemImageName: "quote.bubble", instructions: "Improve writing.")
         let second = CleanupPrompt(name: "Code", systemImageName: "terminal", instructions: "Keep code exact.")
