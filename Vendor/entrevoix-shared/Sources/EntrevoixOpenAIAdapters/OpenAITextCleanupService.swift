@@ -48,7 +48,7 @@ public struct OpenAITextCleanupService: TextCleaning {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CleanupError.emptyInput }
         let cleanupPolicy = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanupPolicy.isEmpty else { throw CleanupError.emptyPrompt }
-        let instructions = CleanupTransformationPolicy.systemInstructions
+        let instructions = CleanupTransformationPolicy.systemInstructions(language: language)
         let input = CleanupTransformationPolicy.input(instructions: cleanupPolicy, transcript: text)
 
         var request = URLRequest(url: endpoint)
