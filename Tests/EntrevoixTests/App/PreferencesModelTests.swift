@@ -87,6 +87,19 @@ final class PreferencesStoreTests: XCTestCase {
         XCTAssertFalse(restored.trimLeadingAndTrailingSilence)
         XCTAssertFalse(restored.reduceLongInternalPauses)
     }
+
+    func testFreshPreferencesUseAutomaticInsertionAndPreserveExistingDeliveryChoice() throws {
+        XCTAssertEqual(AppPreferences().outputMode, .paste)
+
+        let existing = AppPreferences(
+            schemaVersion: AppPreferences.currentSchemaVersion,
+            outputMode: .clipboard
+        )
+        let restored = try JSONDecoder().decode(AppPreferences.self, from: JSONEncoder().encode(existing))
+
+        XCTAssertEqual(restored.schemaVersion, existing.schemaVersion)
+        XCTAssertEqual(restored.outputMode, .clipboard)
+    }
 }
 
 private func configuredPreferences() -> AppPreferences {

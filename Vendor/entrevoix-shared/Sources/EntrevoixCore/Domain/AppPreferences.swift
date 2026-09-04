@@ -53,7 +53,7 @@ public struct AppPreferences: Codable, Equatable, Sendable {
         activeCleanupSelection: CleanupTransformationSelection? = nil,
         activeCleanupPromptID: UUID? = nil,
         cleanupFailurePolicy: CleanupFailurePolicy = .useRawTranscript,
-        outputMode: OutputMode = .clipboard,
+        outputMode: OutputMode = .paste,
         launchAtLogin: Bool = false,
         playFeedbackSounds: Bool = true,
         updateChannel: UpdateChannel = .stable,
