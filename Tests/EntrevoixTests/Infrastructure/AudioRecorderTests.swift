@@ -41,9 +41,10 @@ final class AudioRecorderTests: XCTestCase {
         )
     }
 
-    func testCaptureEngineIsReusedForRepeatedCapturesOnTheSameInput() throws {
-        let engine = AudioCaptureEngineSpy()
-        let factory = AudioCaptureEngineFactorySpy(engines: [engine])
+    func testEachSystemDefaultCaptureConfiguresAndUsesANewEngine() throws {
+        let firstEngine = AudioCaptureEngineSpy()
+        let replacementEngine = AudioCaptureEngineSpy()
+        let factory = AudioCaptureEngineFactorySpy(engines: [firstEngine, replacementEngine])
         let recorder = AudioRecorder(logger: AppLogStore(), captureEngineFactory: factory)
 
         try recorder.start(input: .systemDefault)
@@ -51,14 +52,18 @@ final class AudioRecorderTests: XCTestCase {
         try recorder.start(input: .systemDefault)
         recorder.cancel()
 
-        XCTAssertEqual(factory.makeCount, 1)
-        XCTAssertEqual(engine.startCaptureCount, 2)
-        XCTAssertEqual(engine.pauseCaptureCount, 2)
-        XCTAssertEqual(engine.discardCount, 0)
+        XCTAssertEqual(factory.makeCount, 2)
+        XCTAssertEqual(firstEngine.configuredInputs, [.systemDefault])
+        XCTAssertEqual(firstEngine.startCaptureCount, 1)
+        XCTAssertEqual(firstEngine.pauseCaptureCount, 1)
+        XCTAssertEqual(firstEngine.discardCount, 1)
+        XCTAssertEqual(replacementEngine.configuredInputs, [.systemDefault])
+        XCTAssertEqual(replacementEngine.startCaptureCount, 1)
+        XCTAssertEqual(replacementEngine.pauseCaptureCount, 1)
     }
 
-    func testSystemDefaultEngineIsRecreatedWhenItsDeviceChanges() throws {
-        let staleEngine = AudioCaptureEngineSpy(isReusableResult: false)
+    func testSystemDefaultCaptureReplacesEngineEvenWhenPriorEngineReportsReusable() throws {
+        let staleEngine = AudioCaptureEngineSpy()
         let replacementEngine = AudioCaptureEngineSpy()
         let factory = AudioCaptureEngineFactorySpy(engines: [staleEngine, replacementEngine])
         let recorder = AudioRecorder(logger: AppLogStore(), captureEngineFactory: factory)
@@ -71,6 +76,29 @@ final class AudioRecorderTests: XCTestCase {
         XCTAssertEqual(factory.makeCount, 2)
         XCTAssertEqual(staleEngine.discardCount, 1)
         XCTAssertEqual(replacementEngine.configuredInputs, [.systemDefault])
+    }
+
+    func testAUHALConfigurationUsesRequiredCoreAudioOrderScopesBusesAndDevice() throws {
+        let format = try XCTUnwrap(AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 48_000,
+            channels: 1,
+            interleaved: false
+        ))
+        let configurator = HALInputAudioUnitConfiguratorSpy(inputFormat: format)
+
+        _ = try HALInputCaptureEngine.configureAUHAL(deviceID: 42, using: configurator) { _ in
+            AURenderCallbackStruct(inputProc: nil, inputProcRefCon: nil)
+        }
+
+        XCTAssertEqual(configurator.operations, [
+            .io(enabled: 1, scope: kAudioUnitScope_Input, element: 1),
+            .io(enabled: 0, scope: kAudioUnitScope_Output, element: 0),
+            .device(42, scope: kAudioUnitScope_Global, element: 0),
+            .readFormat(scope: kAudioUnitScope_Input, element: 1),
+            .writeFormat(scope: kAudioUnitScope_Output, element: 1),
+            .callback(scope: kAudioUnitScope_Global, element: 0)
+        ])
     }
 
     func testSelectedInputUsesItsOwnCaptureEngine() throws {
@@ -341,10 +369,12 @@ final class AudioRecorderTests: XCTestCase {
 
     func testSelectedDJIMiniUIDSurvivesNativeFormatChangesAndNormalizesEveryCapture() throws {
         let selectedInput = AudioInputDeviceReference(uid: "dji-mini-input", name: "DJI Mini")
-        let engine = NativeFormatCaptureEngine(buffer: try makeInt16Buffer(sampleRate: 24_000))
+        let int16Engine = NativeFormatCaptureEngine(buffer: try makeInt16Buffer(sampleRate: 24_000))
+        let floatEngine = NativeFormatCaptureEngine(buffer: try makeFloatBuffer(sampleRate: 48_000))
+        let factory = AudioCaptureEngineFactorySpy(engines: [int16Engine, floatEngine])
         let recorder = AudioRecorder(
             logger: AppLogStore(),
-            captureEngineFactory: AudioCaptureEngineFactorySpy(engines: [engine])
+            captureEngineFactory: factory
         )
 
         try recorder.start(input: .device(selectedInput))
@@ -355,7 +385,6 @@ final class AudioRecorderTests: XCTestCase {
             try assertRequiredWAVFormat(at: int16URL)
         }
 
-        engine.replaceNextCapture(with: try makeFloatBuffer(sampleRate: 48_000))
         try recorder.start(input: .device(selectedInput))
         let floatURL = recorder.stop()
         XCTAssertNotNil(floatURL)
@@ -363,7 +392,47 @@ final class AudioRecorderTests: XCTestCase {
             defer { try? FileManager.default.removeItem(at: floatURL) }
             try assertRequiredWAVFormat(at: floatURL)
         }
-        XCTAssertEqual(engine.configuredInputs, [.device(selectedInput)])
+        XCTAssertEqual(factory.makeCount, 2)
+        XCTAssertEqual(int16Engine.configuredInputs, [.device(selectedInput)])
+        XCTAssertEqual(floatEngine.configuredInputs, [.device(selectedInput)])
+    }
+
+    func testAUHALRenderFailureMarksCaptureWriterAsFailed() throws {
+        let format = try XCTUnwrap(AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 48_000,
+            channels: 1,
+            interleaved: false
+        ))
+        let url = try appTemporaryFile()
+        try FileManager.default.removeItem(at: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let audioUnit = try makeGenericOutputAudioUnit()
+        defer { AudioComponentInstanceDispose(audioUnit) }
+        let writer = try AudioCaptureWriter(inputFormat: format, outputURL: url)
+        let context = try HALInputCaptureContext(
+            inputFormat: format,
+            audioUnit: audioUnit,
+            audioUnitRender: { _, _, _, _, _, _ in kAudio_ParamError }
+        )
+        try context.startCapture(writer: writer)
+        var flags: AudioUnitRenderActionFlags = []
+        var timestamp = AudioTimeStamp()
+
+        let status = withUnsafeMutablePointer(to: &flags) { flags in
+            withUnsafePointer(to: &timestamp) { timestamp in
+                context.render(
+                    actionFlags: flags,
+                    timeStamp: timestamp,
+                    busNumber: 1,
+                    frameCount: 480
+                )
+            }
+        }
+
+        XCTAssertEqual(status, kAudio_ParamError)
+        context.pauseCapture()
+        XCTAssertEqual(writer.finish(), .failed)
     }
 
     func testRecorderLogsOnlySafeSelectionAndNativeFormatDiagnosticsForSuccessAndFailure() throws {
@@ -523,6 +592,20 @@ final class AudioRecorderTests: XCTestCase {
         return try XCTUnwrap(AVAudioFormat(streamDescription: &description))
     }
 
+    private func makeGenericOutputAudioUnit() throws -> AudioUnit {
+        var description = AudioComponentDescription(
+            componentType: kAudioUnitType_Output,
+            componentSubType: kAudioUnitSubType_GenericOutput,
+            componentManufacturer: kAudioUnitManufacturer_Apple,
+            componentFlags: 0,
+            componentFlagsMask: 0
+        )
+        let component = try XCTUnwrap(AudioComponentFindNext(nil, &description))
+        var audioUnit: AudioUnit?
+        XCTAssertEqual(AudioComponentInstanceNew(component, &audioUnit), noErr)
+        return try XCTUnwrap(audioUnit)
+    }
+
     private func assertRecorderNormalizesNativeCapture(_ buffer: AVAudioPCMBuffer) throws {
         let engine = NativeFormatCaptureEngine(buffer: buffer)
         let recorder = AudioRecorder(
@@ -673,6 +756,46 @@ private final class AudioCaptureEngineSpy: AudioCaptureEngine {
 }
 
 @MainActor
+private final class HALInputAudioUnitConfiguratorSpy: HALInputAudioUnitConfiguring {
+    enum Operation: Equatable {
+        case io(enabled: UInt32, scope: AudioUnitScope, element: AudioUnitElement)
+        case device(AudioDeviceID, scope: AudioUnitScope, element: AudioUnitElement)
+        case readFormat(scope: AudioUnitScope, element: AudioUnitElement)
+        case writeFormat(scope: AudioUnitScope, element: AudioUnitElement)
+        case callback(scope: AudioUnitScope, element: AudioUnitElement)
+    }
+
+    let sourceFormat: AVAudioFormat
+    private(set) var operations: [Operation] = []
+
+    init(inputFormat: AVAudioFormat) {
+        sourceFormat = inputFormat
+    }
+
+    func setIO(enabled: UInt32, scope: AudioUnitScope, element: AudioUnitElement) throws {
+        operations.append(.io(enabled: enabled, scope: scope, element: element))
+    }
+
+    func setDevice(_ deviceID: AudioDeviceID, scope: AudioUnitScope, element: AudioUnitElement) throws {
+        operations.append(.device(deviceID, scope: scope, element: element))
+    }
+
+    func inputFormat(scope: AudioUnitScope, element: AudioUnitElement) throws -> AVAudioFormat {
+        operations.append(.readFormat(scope: scope, element: element))
+        return sourceFormat
+    }
+
+    func setClientFormat(_ format: AVAudioFormat, scope: AudioUnitScope, element: AudioUnitElement) throws -> AVAudioFormat {
+        operations.append(.writeFormat(scope: scope, element: element))
+        return format
+    }
+
+    func installInputCallback(_ callback: AURenderCallbackStruct, scope: AudioUnitScope, element: AudioUnitElement) throws {
+        operations.append(.callback(scope: scope, element: element))
+    }
+}
+
+@MainActor
 private final class NativeFormatCaptureEngine: AudioCaptureEngine {
     private var nextCapture: AVAudioPCMBuffer
     private(set) var configuredInputs: [AudioInputSelection] = []
@@ -695,9 +818,6 @@ private final class NativeFormatCaptureEngine: AudioCaptureEngine {
 
     func discard() {}
 
-    func replaceNextCapture(with buffer: AVAudioPCMBuffer) {
-        nextCapture = buffer
-    }
 }
 
 @MainActor
