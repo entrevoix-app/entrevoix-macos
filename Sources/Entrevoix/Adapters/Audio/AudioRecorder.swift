@@ -557,7 +557,7 @@ final class HALInputCaptureContext: @unchecked Sendable {
     func render(
         actionFlags: UnsafeMutablePointer<AudioUnitRenderActionFlags>,
         timeStamp: UnsafePointer<AudioTimeStamp>,
-        busNumber: UInt32,
+        busNumber _: UInt32,
         frameCount: UInt32
     ) -> OSStatus {
         state.withLock { state in
@@ -578,7 +578,7 @@ final class HALInputCaptureContext: @unchecked Sendable {
                 audioUnit,
                 actionFlags,
                 timeStamp,
-                busNumber,
+                1,
                 frameCount,
                 renderBuffer.mutableAudioBufferList
             )

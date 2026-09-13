@@ -410,10 +410,14 @@ final class AudioRecorderTests: XCTestCase {
         let audioUnit = try makeGenericOutputAudioUnit()
         defer { AudioComponentInstanceDispose(audioUnit) }
         let writer = try AudioCaptureWriter(inputFormat: format, outputURL: url)
+        var renderedElement: UInt32?
         let context = try HALInputCaptureContext(
             inputFormat: format,
             audioUnit: audioUnit,
-            audioUnitRender: { _, _, _, _, _, _ in kAudio_ParamError }
+            audioUnitRender: { _, _, _, element, _, _ in
+                renderedElement = element
+                return kAudio_ParamError
+            }
         )
         try context.startCapture(writer: writer)
         var flags: AudioUnitRenderActionFlags = []
@@ -424,13 +428,14 @@ final class AudioRecorderTests: XCTestCase {
                 context.render(
                     actionFlags: flags,
                     timeStamp: timestamp,
-                    busNumber: 1,
+                    busNumber: 0,
                     frameCount: 480
                 )
             }
         }
 
         XCTAssertEqual(status, kAudio_ParamError)
+        XCTAssertEqual(renderedElement, 1)
         context.pauseCapture()
         XCTAssertEqual(writer.finish(), .failed)
     }
