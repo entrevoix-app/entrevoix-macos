@@ -5,6 +5,33 @@ import EntrevoixCore
 import Foundation
 import Synchronization
 
+enum AudioCaptureFailure: Equatable, Sendable {
+    case frameCapacity
+    case audioUnitRender(OSStatus)
+    case copy
+    case pool
+    case writerProcessing
+
+    var category: String {
+        switch self {
+        case .frameCapacity: "frameCapacity"
+        case .audioUnitRender: "audioUnitRender"
+        case .copy: "copy"
+        case .pool: "pool"
+        case .writerProcessing: "writerProcessing"
+        }
+    }
+
+    var status: OSStatus {
+        switch self {
+        case .frameCapacity, .copy: kAudio_ParamError
+        case .audioUnitRender(let status): status
+        case .pool: kAudio_MemFullError
+        case .writerProcessing: kAudio_UnimplementedError
+        }
+    }
+}
+
 @MainActor
 protocol AudioLevelProviding: AnyObject {
     func updateMeters()
@@ -175,12 +202,13 @@ final class AudioRecorder: AudioRecording, AudioLevelProviding {
         self.captureWriter = nil
 
         let result = captureWriter.finish()
+        let failure = captureWriter.failure
         if result != .success, let currentURL {
             try? FileManager.default.removeItem(at: currentURL)
             self.currentURL = nil
         }
-        if result == .failed {
-            logger.log("Audio input capture failed (render or writer failure).")
+        if let failure {
+            logger.log("Audio input capture failed (category=\(failure.category) status=\(failure.status)).")
         }
         return result
     }
@@ -493,6 +521,8 @@ final class HALInputCaptureContext: @unchecked Sendable {
     private struct State {
         var writer: AudioCaptureWriter?
         var activeChunk: AudioCaptureBuffer?
+        var failNextCopyForTesting = false
+        var failNextChunkCheckoutForTesting = false
     }
 
     private let audioUnit: AudioUnit
@@ -564,9 +594,8 @@ final class HALInputCaptureContext: @unchecked Sendable {
             guard let writer = state.writer, let activeChunk = state.activeChunk else {
                 return noErr
             }
-            let activeBuffer = activeChunk.buffer
             guard renderBuffer.frameCapacity >= frameCount else {
-                writer.markFailed()
+                writer.markFailed(.frameCapacity)
                 return kAudio_ParamError
             }
 
@@ -583,29 +612,64 @@ final class HALInputCaptureContext: @unchecked Sendable {
                 renderBuffer.mutableAudioBufferList
             )
             guard status == noErr else {
-                writer.markFailed()
+                writer.markFailed(.audioUnitRender(status))
                 return status
             }
 
-            guard copy(renderBuffer, into: activeBuffer, frameCount: frameCount) else {
-                writer.markFailed()
+            let shouldFailCopy = state.failNextCopyForTesting
+            state.failNextCopyForTesting = false
+            guard !shouldFailCopy else {
+                writer.markFailed(.copy)
                 return noErr
             }
-            guard activeBuffer.frameLength == activeBuffer.frameCapacity else {
-                return noErr
-            }
-            guard let nextChunk = chunkPool.checkout() else {
-                writer.markFailed()
-                state.writer = nil
-                state.activeChunk = nil
-                chunkPool.checkin(activeChunk)
-                return noErr
-            }
+            var sourceOffset: AVAudioFrameCount = 0
+            var remainingFrameCount = frameCount
+            var currentChunk = activeChunk
+            while remainingFrameCount > 0 {
+                let activeBuffer = currentChunk.buffer
+                let copiedFrameCount = min(
+                    remainingFrameCount,
+                    activeBuffer.frameCapacity - activeBuffer.frameLength
+                )
+                guard copiedFrameCount > 0,
+                      copy(
+                          renderBuffer,
+                          sourceFrameOffset: sourceOffset,
+                          into: activeBuffer,
+                          frameCount: copiedFrameCount
+                      ) else {
+                    writer.markFailed(.copy)
+                    return noErr
+                }
+                sourceOffset += copiedFrameCount
+                remainingFrameCount -= copiedFrameCount
+                guard activeBuffer.frameLength == activeBuffer.frameCapacity else {
+                    continue
+                }
+                let shouldFailCheckout = state.failNextChunkCheckoutForTesting
+                state.failNextChunkCheckoutForTesting = false
+                guard !shouldFailCheckout, let nextChunk = chunkPool.checkout() else {
+                    writer.markFailed(.pool)
+                    state.writer = nil
+                    state.activeChunk = nil
+                    chunkPool.checkin(currentChunk)
+                    return noErr
+                }
 
-            state.activeChunk = nextChunk
-            enqueue(activeChunk, with: writer)
+                state.activeChunk = nextChunk
+                enqueue(currentChunk, with: writer)
+                currentChunk = nextChunk
+            }
             return noErr
         }
+    }
+
+    func failNextCopyForTesting() {
+        state.withLock { $0.failNextCopyForTesting = true }
+    }
+
+    func failNextChunkCheckoutForTesting() {
+        state.withLock { $0.failNextChunkCheckoutForTesting = true }
     }
 
     private func flushActiveChunk() {
@@ -633,11 +697,13 @@ final class HALInputCaptureContext: @unchecked Sendable {
 
     private func copy(
         _ source: AVAudioPCMBuffer,
+        sourceFrameOffset: AVAudioFrameCount,
         into destination: AVAudioPCMBuffer,
         frameCount: AVAudioFrameCount
     ) -> Bool {
         let destinationOffset = destination.frameLength
-        guard destination.frameCapacity - destinationOffset >= frameCount,
+        guard source.frameLength - sourceFrameOffset >= frameCount,
+              destination.frameCapacity - destinationOffset >= frameCount,
               source.format == destination.format else {
             return false
         }
@@ -651,7 +717,7 @@ final class HALInputCaptureContext: @unchecked Sendable {
             }
             memcpy(
                 destinationData.advanced(by: Int(destinationOffset) * Int(destination.format.streamDescription.pointee.mBytesPerFrame)),
-                sourceData,
+                sourceData.advanced(by: Int(sourceFrameOffset) * Int(source.format.streamDescription.pointee.mBytesPerFrame)),
                 byteCount
             )
         }
@@ -762,7 +828,8 @@ final class AudioCaptureWriter: Sendable {
         let outputFormat: AVAudioFormat
         var averagePower: Float = -160
         var didWriteFrames = false
-        var didFail = false
+        var failure: AudioCaptureFailure?
+        var failNextProcessingForTesting = false
         var isFinished = false
     }
 
@@ -832,6 +899,10 @@ final class AudioCaptureWriter: Sendable {
         state.withLock { $0.averagePower }
     }
 
+    var failure: AudioCaptureFailure? {
+        state.withLock { $0.failure }
+    }
+
     /// Called from the realtime callback only after it has filled a pooled
     /// chunk. Conversion and disk I/O then run on this dedicated serial queue.
     fileprivate func enqueue(_ lease: AudioCaptureBufferLease) {
@@ -843,13 +914,25 @@ final class AudioCaptureWriter: Sendable {
         }
     }
 
-    func markFailed() {
-        state.withLock { $0.didFail = true }
+    func markFailed(_ failure: AudioCaptureFailure) {
+        state.withLock {
+            guard $0.failure == nil else { return }
+            $0.failure = failure
+        }
+    }
+
+    func failNextProcessingForTesting() {
+        state.withLock { $0.failNextProcessingForTesting = true }
     }
 
     func append(_ input: AVAudioPCMBuffer) {
         state.withLock { state in
-            guard !state.isFinished, !state.didFail else { return }
+            guard !state.isFinished, state.failure == nil else { return }
+            if state.failNextProcessingForTesting {
+                state.failNextProcessingForTesting = false
+                state.failure = .writerProcessing
+                return
+            }
 
             guard let floatInput = Self.floatBuffer(
                 from: input,
@@ -859,7 +942,7 @@ final class AudioCaptureWriter: Sendable {
                 floatInput,
                 format: state.converterInputFormat
             ) else {
-                state.didFail = true
+                state.failure = .writerProcessing
                 return
             }
             state.averagePower = Self.averagePower(for: floatInput)
@@ -872,7 +955,7 @@ final class AudioCaptureWriter: Sendable {
                 pcmFormat: state.outputFormat,
                 frameCapacity: AVAudioFrameCount(convertedFrameCount)
             ) else {
-                state.didFail = true
+                state.failure = .writerProcessing
                 return
             }
 
@@ -882,14 +965,14 @@ final class AudioCaptureWriter: Sendable {
                 source.next(into: inputStatus)
             }
             guard conversionError == nil, status != .error, output.frameLength > 0 else {
-                state.didFail = true
+                state.failure = .writerProcessing
                 return
             }
             do {
                 try state.file.write(from: output)
                 state.didWriteFrames = true
             } catch {
-                state.didFail = true
+                state.failure = .writerProcessing
             }
         }
     }
@@ -900,11 +983,11 @@ final class AudioCaptureWriter: Sendable {
         pendingWrites.wait()
         return state.withLock { state -> Result in
             guard !state.isFinished else {
-                return state.didFail ? .failed : (state.didWriteFrames ? .success : .empty)
+                return state.failure == nil ? (state.didWriteFrames ? .success : .empty) : .failed
             }
             state.isFinished = true
             state.file.close()
-            return state.didFail ? .failed : (state.didWriteFrames ? .success : .empty)
+            return state.failure == nil ? (state.didWriteFrames ? .success : .empty) : .failed
         }
     }
 
