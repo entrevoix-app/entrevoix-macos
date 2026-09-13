@@ -41,9 +41,10 @@ final class AudioRecorderTests: XCTestCase {
         )
     }
 
-    func testCaptureEngineIsReusedForRepeatedCapturesOnTheSameInput() throws {
-        let engine = AudioCaptureEngineSpy()
-        let factory = AudioCaptureEngineFactorySpy(engines: [engine])
+    func testEachSystemDefaultCaptureConfiguresAndUsesANewEngine() throws {
+        let firstEngine = AudioCaptureEngineSpy()
+        let replacementEngine = AudioCaptureEngineSpy()
+        let factory = AudioCaptureEngineFactorySpy(engines: [firstEngine, replacementEngine])
         let recorder = AudioRecorder(logger: AppLogStore(), captureEngineFactory: factory)
 
         try recorder.start(input: .systemDefault)
@@ -51,14 +52,18 @@ final class AudioRecorderTests: XCTestCase {
         try recorder.start(input: .systemDefault)
         recorder.cancel()
 
-        XCTAssertEqual(factory.makeCount, 1)
-        XCTAssertEqual(engine.startCaptureCount, 2)
-        XCTAssertEqual(engine.pauseCaptureCount, 2)
-        XCTAssertEqual(engine.discardCount, 0)
+        XCTAssertEqual(factory.makeCount, 2)
+        XCTAssertEqual(firstEngine.configuredInputs, [.systemDefault])
+        XCTAssertEqual(firstEngine.startCaptureCount, 1)
+        XCTAssertEqual(firstEngine.pauseCaptureCount, 1)
+        XCTAssertEqual(firstEngine.discardCount, 1)
+        XCTAssertEqual(replacementEngine.configuredInputs, [.systemDefault])
+        XCTAssertEqual(replacementEngine.startCaptureCount, 1)
+        XCTAssertEqual(replacementEngine.pauseCaptureCount, 1)
     }
 
-    func testSystemDefaultEngineIsRecreatedWhenItsDeviceChanges() throws {
-        let staleEngine = AudioCaptureEngineSpy(isReusableResult: false)
+    func testSystemDefaultCaptureReplacesEngineEvenWhenPriorEngineReportsReusable() throws {
+        let staleEngine = AudioCaptureEngineSpy()
         let replacementEngine = AudioCaptureEngineSpy()
         let factory = AudioCaptureEngineFactorySpy(engines: [staleEngine, replacementEngine])
         let recorder = AudioRecorder(logger: AppLogStore(), captureEngineFactory: factory)
@@ -71,6 +76,29 @@ final class AudioRecorderTests: XCTestCase {
         XCTAssertEqual(factory.makeCount, 2)
         XCTAssertEqual(staleEngine.discardCount, 1)
         XCTAssertEqual(replacementEngine.configuredInputs, [.systemDefault])
+    }
+
+    func testAUHALConfigurationUsesRequiredCoreAudioOrderScopesBusesAndDevice() throws {
+        let format = try XCTUnwrap(AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 48_000,
+            channels: 1,
+            interleaved: false
+        ))
+        let configurator = HALInputAudioUnitConfiguratorSpy(inputFormat: format)
+
+        _ = try HALInputCaptureEngine.configureAUHAL(deviceID: 42, using: configurator) { _ in
+            AURenderCallbackStruct(inputProc: nil, inputProcRefCon: nil)
+        }
+
+        XCTAssertEqual(configurator.operations, [
+            .io(enabled: 1, scope: kAudioUnitScope_Input, element: 1),
+            .io(enabled: 0, scope: kAudioUnitScope_Output, element: 0),
+            .device(42, scope: kAudioUnitScope_Global, element: 0),
+            .readFormat(scope: kAudioUnitScope_Input, element: 1),
+            .writeFormat(scope: kAudioUnitScope_Output, element: 1),
+            .callback(scope: kAudioUnitScope_Global, element: 0)
+        ])
     }
 
     func testSelectedInputUsesItsOwnCaptureEngine() throws {
@@ -341,10 +369,12 @@ final class AudioRecorderTests: XCTestCase {
 
     func testSelectedDJIMiniUIDSurvivesNativeFormatChangesAndNormalizesEveryCapture() throws {
         let selectedInput = AudioInputDeviceReference(uid: "dji-mini-input", name: "DJI Mini")
-        let engine = NativeFormatCaptureEngine(buffer: try makeInt16Buffer(sampleRate: 24_000))
+        let int16Engine = NativeFormatCaptureEngine(buffer: try makeInt16Buffer(sampleRate: 24_000))
+        let floatEngine = NativeFormatCaptureEngine(buffer: try makeFloatBuffer(sampleRate: 48_000))
+        let factory = AudioCaptureEngineFactorySpy(engines: [int16Engine, floatEngine])
         let recorder = AudioRecorder(
             logger: AppLogStore(),
-            captureEngineFactory: AudioCaptureEngineFactorySpy(engines: [engine])
+            captureEngineFactory: factory
         )
 
         try recorder.start(input: .device(selectedInput))
@@ -355,7 +385,6 @@ final class AudioRecorderTests: XCTestCase {
             try assertRequiredWAVFormat(at: int16URL)
         }
 
-        engine.replaceNextCapture(with: try makeFloatBuffer(sampleRate: 48_000))
         try recorder.start(input: .device(selectedInput))
         let floatURL = recorder.stop()
         XCTAssertNotNil(floatURL)
@@ -363,7 +392,252 @@ final class AudioRecorderTests: XCTestCase {
             defer { try? FileManager.default.removeItem(at: floatURL) }
             try assertRequiredWAVFormat(at: floatURL)
         }
-        XCTAssertEqual(engine.configuredInputs, [.device(selectedInput)])
+        XCTAssertEqual(factory.makeCount, 2)
+        XCTAssertEqual(int16Engine.configuredInputs, [.device(selectedInput)])
+        XCTAssertEqual(floatEngine.configuredInputs, [.device(selectedInput)])
+    }
+
+    func testAUHALRenderFailureMarksCaptureWriterAsFailed() throws {
+        let format = try XCTUnwrap(AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 48_000,
+            channels: 1,
+            interleaved: false
+        ))
+        let url = try appTemporaryFile()
+        try FileManager.default.removeItem(at: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let audioUnit = try makeGenericOutputAudioUnit()
+        defer { AudioComponentInstanceDispose(audioUnit) }
+        let writer = try AudioCaptureWriter(inputFormat: format, outputURL: url)
+        var renderedElement: UInt32?
+        let context = try HALInputCaptureContext(
+            inputFormat: format,
+            audioUnit: audioUnit,
+            audioUnitRender: { _, _, _, element, _, _ in
+                renderedElement = element
+                return kAudio_ParamError
+            }
+        )
+        try context.startCapture(writer: writer)
+        var flags: AudioUnitRenderActionFlags = []
+        var timestamp = AudioTimeStamp()
+
+        let status = withUnsafeMutablePointer(to: &flags) { flags in
+            withUnsafePointer(to: &timestamp) { timestamp in
+                context.render(
+                    actionFlags: flags,
+                    timeStamp: timestamp,
+                    busNumber: 0,
+                    frameCount: 480
+                )
+            }
+        }
+
+        XCTAssertEqual(status, kAudio_ParamError)
+        XCTAssertEqual(renderedElement, 1)
+        context.pauseCapture()
+        XCTAssertEqual(writer.finish(), .failed)
+    }
+
+    func testRenderBeyondBufferCapacityRecordsFrameCapacityFailure() throws {
+        let (context, writer) = try makeCaptureContext()
+        defer { context.discardCapture() }
+
+        let status = render(context, frameCount: 8_193)
+
+        XCTAssertEqual(status, kAudio_ParamError)
+        XCTAssertEqual(writer.finish(), .failed)
+        XCTAssertEqual(writer.failure, .frameCapacity)
+    }
+
+    func testAudioUnitRenderFailureRecordsReturnedStatus() throws {
+        let (context, writer) = try makeCaptureContext(render: { -50 })
+        defer { context.discardCapture() }
+
+        let status = render(context, frameCount: 480)
+
+        XCTAssertEqual(status, -50)
+        XCTAssertEqual(writer.failure, .audioUnitRender(-50))
+    }
+
+    func testCopyFailureRecordsCopyFailureWithoutFailingRenderCallback() throws {
+        let (context, writer) = try makeCaptureContext()
+        defer { context.discardCapture() }
+        context.failNextCopyForTesting()
+
+        XCTAssertEqual(render(context, frameCount: 480), noErr)
+        XCTAssertEqual(writer.failure, .copy)
+    }
+
+    func testRenderCrossingPooledChunkBoundaryCopiesAllFramesWithoutFailure() throws {
+        let format = try XCTUnwrap(AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 16_000,
+            channels: 1,
+            interleaved: false
+        ))
+        let url = try appTemporaryFile()
+        try FileManager.default.removeItem(at: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let audioUnit = try makeGenericOutputAudioUnit()
+        defer { AudioComponentInstanceDispose(audioUnit) }
+        let writer = try AudioCaptureWriter(inputFormat: format, outputURL: url)
+        let context = try HALInputCaptureContext(
+            inputFormat: format,
+            audioUnit: audioUnit,
+            audioUnitRender: { _, _, _, _, frameCount, bufferList in
+                let buffers = UnsafeMutableAudioBufferListPointer(bufferList)
+                guard let samples = buffers[0].mData?.bindMemory(
+                    to: Float.self,
+                    capacity: Int(frameCount)
+                ) else {
+                    return kAudio_ParamError
+                }
+                for frame in 0..<Int(frameCount) {
+                    samples[frame] = 0.25
+                }
+                return noErr
+            }
+        )
+        try context.startCapture(writer: writer)
+
+        for _ in 0..<18 {
+            XCTAssertEqual(render(context, frameCount: 480), noErr)
+        }
+        context.pauseCapture()
+
+        XCTAssertEqual(writer.finish(), .success)
+        XCTAssertNil(writer.failure)
+        XCTAssertGreaterThan(
+            try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? UInt64 ?? 0,
+            44
+        )
+    }
+
+    func testNextChunkCheckoutFailureRecordsPoolFailureWithoutFailingRenderCallback() throws {
+        let (context, writer) = try makeCaptureContext()
+        defer { context.discardCapture() }
+        context.failNextChunkCheckoutForTesting()
+
+        XCTAssertEqual(render(context, frameCount: 8_192), noErr)
+        XCTAssertEqual(writer.failure, .pool)
+    }
+
+    func testWriterProcessingFailureIsReportedAsWriterProcessing() throws {
+        let format = try requiredInputFormat()
+        let url = try appTemporaryFile()
+        try FileManager.default.removeItem(at: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let writer = try AudioCaptureWriter(inputFormat: format, outputURL: url)
+        let input = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 480))
+        input.frameLength = 480
+        writer.failNextProcessingForTesting()
+
+        writer.append(input)
+
+        XCTAssertEqual(writer.finish(), .failed)
+        XCTAssertEqual(writer.failure, .writerProcessing)
+    }
+
+    func testFirstCaptureFailureIsRetained() throws {
+        var renderCallCount = 0
+        let (context, writer) = try makeCaptureContext(render: {
+            renderCallCount += 1
+            return renderCallCount == 1 ? -50 : noErr
+        })
+        defer { context.discardCapture() }
+
+        XCTAssertEqual(render(context, frameCount: 480), -50)
+        context.failNextChunkCheckoutForTesting()
+        XCTAssertEqual(render(context, frameCount: 8_192), noErr)
+
+        XCTAssertEqual(writer.failure, .audioUnitRender(-50))
+    }
+
+    func testStopDeletesFailedCaptureAndLogsExactFailureCategoryAndStatus() throws {
+        let cases: [(AudioCaptureFailure, String, OSStatus)] = [
+            (.frameCapacity, "frameCapacity", kAudio_ParamError),
+            (.audioUnitRender(-50), "audioUnitRender", -50),
+            (.copy, "copy", kAudio_ParamError),
+            (.pool, "pool", kAudio_MemFullError),
+            (.writerProcessing, "writerProcessing", kAudio_UnimplementedError)
+        ]
+
+        for (failure, category, status) in cases {
+            let logger = LogWritingSpy()
+            let engine = AudioCaptureEngineSpy(startCaptureAction: { writer in
+                writer.markFailed(failure)
+            })
+            let recorder = AudioRecorder(
+                logger: logger,
+                captureEngineFactory: AudioCaptureEngineFactorySpy(engines: [engine])
+            )
+            try recorder.start(input: .systemDefault)
+            let captureURL = try XCTUnwrap(recorder.currentURL)
+
+            XCTAssertNil(recorder.stop())
+            XCTAssertFalse(FileManager.default.fileExists(atPath: captureURL.path))
+            XCTAssertEqual(
+                logger.messages.filter { $0.contains("Audio input capture failed") },
+                ["Audio input capture failed (category=\(category) status=\(status))."]
+            )
+        }
+    }
+
+    func testFailedCaptureDeletesFileAndKeepsLogsFreeOfSensitiveContent() throws {
+        let uid = "dji-mini-uid-SECRET-123"
+        let audioBytes = "audio-bytes-SECRET"
+        let transcript = "private transcript"
+        let prompt = "private prompt"
+        let providerBody = #"{\"api_key\":\"secret\"}"#
+        let logger = LogWritingSpy()
+        let engine = AudioCaptureEngineSpy(startCaptureAction: { writer in
+            writer.markFailed(.copy)
+        })
+        let recorder = AudioRecorder(
+            logger: logger,
+            captureEngineFactory: AudioCaptureEngineFactorySpy(engines: [engine])
+        )
+
+        try recorder.start(input: .device(AudioInputDeviceReference(uid: uid, name: "DJI Mini")))
+        let captureURL = try XCTUnwrap(recorder.currentURL)
+
+        XCTAssertNil(recorder.stop())
+        XCTAssertFalse(FileManager.default.fileExists(atPath: captureURL.path))
+        let messages = logger.messages.joined(separator: "\n")
+        XCTAssertFalse(messages.contains(uid))
+        XCTAssertFalse(messages.contains(audioBytes))
+        XCTAssertFalse(messages.contains(transcript))
+        XCTAssertFalse(messages.contains(prompt))
+        XCTAssertFalse(messages.contains(providerBody))
+    }
+
+    func testStopPreservesSuccessfulAndEmptyResultsWithoutFailureLogs() throws {
+        let successfulEngine = NativeFormatCaptureEngine(buffer: try makeFloatBuffer(sampleRate: 48_000))
+        let successLogger = LogWritingSpy()
+        let successRecorder = AudioRecorder(
+            logger: successLogger,
+            captureEngineFactory: AudioCaptureEngineFactorySpy(engines: [successfulEngine])
+        )
+        try successRecorder.start(input: .systemDefault)
+
+        let successURL = try XCTUnwrap(successRecorder.stop())
+        defer { try? FileManager.default.removeItem(at: successURL) }
+        XCTAssertNil(successfulEngine.lastWriter?.failure)
+        XCTAssertFalse(successLogger.messages.contains { $0.contains("Audio input capture failed") })
+
+        let emptyEngine = AudioCaptureEngineSpy()
+        let emptyLogger = LogWritingSpy()
+        let emptyRecorder = AudioRecorder(
+            logger: emptyLogger,
+            captureEngineFactory: AudioCaptureEngineFactorySpy(engines: [emptyEngine])
+        )
+        try emptyRecorder.start(input: .systemDefault)
+
+        XCTAssertNil(emptyRecorder.stop())
+        XCTAssertNil(emptyEngine.lastWriter?.failure)
+        XCTAssertFalse(emptyLogger.messages.contains { $0.contains("Audio input capture failed") })
     }
 
     func testRecorderLogsOnlySafeSelectionAndNativeFormatDiagnosticsForSuccessAndFailure() throws {
@@ -430,6 +704,49 @@ final class AudioRecorderTests: XCTestCase {
         XCTAssertEqual(trimmed.fileFormat.channelCount, 1)
         XCTAssertEqual(trimmed.length, 17_600)
         XCTAssertFalse(FileManager.default.fileExists(atPath: sourceURL.path))
+    }
+
+    private func requiredInputFormat() throws -> AVAudioFormat {
+        try XCTUnwrap(AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 48_000,
+            channels: 1,
+            interleaved: false
+        ))
+    }
+
+    private func makeCaptureContext(
+        render: @escaping () -> OSStatus = { noErr }
+    ) throws -> (HALInputCaptureContext, AudioCaptureWriter) {
+        let format = try requiredInputFormat()
+        let url = try appTemporaryFile()
+        try FileManager.default.removeItem(at: url)
+        let writer = try AudioCaptureWriter(inputFormat: format, outputURL: url)
+        let context = try HALInputCaptureContext(
+            inputFormat: format,
+            audioUnit: try makeGenericOutputAudioUnit(),
+            audioUnitRender: { _, _, _, _, _, _ in render() }
+        )
+        try context.startCapture(writer: writer)
+        return (context, writer)
+    }
+
+    private func render(
+        _ context: HALInputCaptureContext,
+        frameCount: UInt32
+    ) -> OSStatus {
+        var flags: AudioUnitRenderActionFlags = []
+        var timestamp = AudioTimeStamp()
+        return withUnsafeMutablePointer(to: &flags) { flags in
+            withUnsafePointer(to: &timestamp) { timestamp in
+                context.render(
+                    actionFlags: flags,
+                    timeStamp: timestamp,
+                    busNumber: 0,
+                    frameCount: frameCount
+                )
+            }
+        }
     }
 
     private func makeInt16Buffer(sampleRate: Double) throws -> AVAudioPCMBuffer {
@@ -521,6 +838,20 @@ final class AudioRecorderTests: XCTestCase {
             mReserved: 0
         )
         return try XCTUnwrap(AVAudioFormat(streamDescription: &description))
+    }
+
+    private func makeGenericOutputAudioUnit() throws -> AudioUnit {
+        var description = AudioComponentDescription(
+            componentType: kAudioUnitType_Output,
+            componentSubType: kAudioUnitSubType_GenericOutput,
+            componentManufacturer: kAudioUnitManufacturer_Apple,
+            componentFlags: 0,
+            componentFlagsMask: 0
+        )
+        let component = try XCTUnwrap(AudioComponentFindNext(nil, &description))
+        var audioUnit: AudioUnit?
+        XCTAssertEqual(AudioComponentInstanceNew(component, &audioUnit), noErr)
+        return try XCTUnwrap(audioUnit)
     }
 
     private func assertRecorderNormalizesNativeCapture(_ buffer: AVAudioPCMBuffer) throws {
@@ -626,11 +957,13 @@ private final class AudioCaptureEngineSpy: AudioCaptureEngine {
     let configureError: (any Error)?
     let startCaptureError: (any Error)?
     let isReusableResult: Bool
+    let startCaptureAction: ((AudioCaptureWriter) -> Void)?
 
     private(set) var configuredInputs: [AudioInputSelection] = []
     private(set) var startCaptureCount = 0
     private(set) var pauseCaptureCount = 0
     private(set) var discardCount = 0
+    private(set) var lastWriter: AudioCaptureWriter?
 
     init(
         inputFormat: AVAudioFormat? = AVAudioFormat(
@@ -641,12 +974,14 @@ private final class AudioCaptureEngineSpy: AudioCaptureEngine {
         ),
         configureError: (any Error)? = nil,
         startCaptureError: (any Error)? = nil,
-        isReusableResult: Bool = true
+        isReusableResult: Bool = true,
+        startCaptureAction: ((AudioCaptureWriter) -> Void)? = nil
     ) {
         self.inputFormat = inputFormat ?? AVAudioFormat()
         self.configureError = configureError
         self.startCaptureError = startCaptureError
         self.isReusableResult = isReusableResult
+        self.startCaptureAction = startCaptureAction
     }
 
     func configure(input: AudioInputSelection) throws {
@@ -656,7 +991,9 @@ private final class AudioCaptureEngineSpy: AudioCaptureEngine {
 
     func startCapture(writer: AudioCaptureWriter) throws {
         startCaptureCount += 1
+        lastWriter = writer
         if let startCaptureError { throw startCaptureError }
+        startCaptureAction?(writer)
     }
 
     func isReusable(for input: AudioInputSelection) -> Bool {
@@ -673,9 +1010,50 @@ private final class AudioCaptureEngineSpy: AudioCaptureEngine {
 }
 
 @MainActor
+private final class HALInputAudioUnitConfiguratorSpy: HALInputAudioUnitConfiguring {
+    enum Operation: Equatable {
+        case io(enabled: UInt32, scope: AudioUnitScope, element: AudioUnitElement)
+        case device(AudioDeviceID, scope: AudioUnitScope, element: AudioUnitElement)
+        case readFormat(scope: AudioUnitScope, element: AudioUnitElement)
+        case writeFormat(scope: AudioUnitScope, element: AudioUnitElement)
+        case callback(scope: AudioUnitScope, element: AudioUnitElement)
+    }
+
+    let sourceFormat: AVAudioFormat
+    private(set) var operations: [Operation] = []
+
+    init(inputFormat: AVAudioFormat) {
+        sourceFormat = inputFormat
+    }
+
+    func setIO(enabled: UInt32, scope: AudioUnitScope, element: AudioUnitElement) throws {
+        operations.append(.io(enabled: enabled, scope: scope, element: element))
+    }
+
+    func setDevice(_ deviceID: AudioDeviceID, scope: AudioUnitScope, element: AudioUnitElement) throws {
+        operations.append(.device(deviceID, scope: scope, element: element))
+    }
+
+    func inputFormat(scope: AudioUnitScope, element: AudioUnitElement) throws -> AVAudioFormat {
+        operations.append(.readFormat(scope: scope, element: element))
+        return sourceFormat
+    }
+
+    func setClientFormat(_ format: AVAudioFormat, scope: AudioUnitScope, element: AudioUnitElement) throws -> AVAudioFormat {
+        operations.append(.writeFormat(scope: scope, element: element))
+        return format
+    }
+
+    func installInputCallback(_ callback: AURenderCallbackStruct, scope: AudioUnitScope, element: AudioUnitElement) throws {
+        operations.append(.callback(scope: scope, element: element))
+    }
+}
+
+@MainActor
 private final class NativeFormatCaptureEngine: AudioCaptureEngine {
     private var nextCapture: AVAudioPCMBuffer
     private(set) var configuredInputs: [AudioInputSelection] = []
+    private(set) var lastWriter: AudioCaptureWriter?
 
     init(buffer: AVAudioPCMBuffer) {
         nextCapture = buffer
@@ -688,6 +1066,7 @@ private final class NativeFormatCaptureEngine: AudioCaptureEngine {
     }
 
     func startCapture(writer: AudioCaptureWriter) throws {
+        lastWriter = writer
         writer.append(nextCapture)
     }
 
@@ -695,9 +1074,6 @@ private final class NativeFormatCaptureEngine: AudioCaptureEngine {
 
     func discard() {}
 
-    func replaceNextCapture(with buffer: AVAudioPCMBuffer) {
-        nextCapture = buffer
-    }
 }
 
 @MainActor
