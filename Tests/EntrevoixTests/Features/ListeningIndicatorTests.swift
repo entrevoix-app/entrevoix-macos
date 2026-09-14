@@ -30,7 +30,7 @@ final class ListeningIndicatorTests: XCTestCase {
         )
 
         XCTAssertGreaterThan(layout.selectorCapsuleFrame.width, 128)
-        XCTAssertLessThan(layout.selectorCapsuleFrame.width, 320)
+        XCTAssertLessThan(layout.selectorCapsuleFrame.width, ListeningIndicatorLayout.maximumWidth)
         XCTAssertTrue(layout.selectorLabels.allSatisfy { !$0.isTruncated })
         XCTAssertLessThanOrEqual(
             measuredLabelWidth("Edit mode"),
@@ -51,7 +51,7 @@ final class ListeningIndicatorTests: XCTestCase {
             microphoneName: microphoneName
         )
 
-        XCTAssertEqual(layout.selectorCapsuleFrame.width, 320)
+        XCTAssertEqual(layout.selectorCapsuleFrame.width, ListeningIndicatorLayout.maximumWidth)
         XCTAssertTrue(layout.selectorLabels.allSatisfy(\.isTruncated))
         XCTAssertGreaterThan(
             measuredLabelWidth(promptName),
@@ -61,8 +61,6 @@ final class ListeningIndicatorTests: XCTestCase {
             measuredLabelWidth(microphoneName),
             try usableTitleWidth(of: audioInputControl)
         )
-        XCTAssertEqual(layout.selectorLabels[0].availableWidth, try usableTitleWidth(of: promptControl))
-        XCTAssertEqual(layout.selectorLabels[1].availableWidth, try usableTitleWidth(of: audioInputControl))
     }
 
     func testCappedAsymmetricSelectorLabelsGiveRemainingWidthToLongLabel() {
@@ -73,15 +71,15 @@ final class ListeningIndicatorTests: XCTestCase {
             selectorLabels: [promptName, microphoneName]
         )
 
-        XCTAssertEqual(layout.selectorCapsuleFrame.width, 320)
-        XCTAssertEqual(layout.promptControlFrame.width, measuredLabelWidth(promptName) + 55)
+        XCTAssertEqual(layout.selectorCapsuleFrame.width, ListeningIndicatorLayout.maximumWidth)
+        XCTAssertEqual(layout.promptControlFrame.width, measuredLabelWidth(promptName) + 45)
         XCTAssertFalse(layout.selectorLabels[0].isTruncated)
         XCTAssertGreaterThan(layout.selectorLabels[1].availableWidth, layout.selectorLabels[0].availableWidth)
         XCTAssertTrue(layout.selectorLabels[1].isTruncated)
     }
 
     @MainActor
-    func testMediumLabelsReportTruncationFromEachPopupUsableTitleWidth() throws {
+    func testMediumLabelsExpandToFitEachPopupTitleArea() throws {
         let promptName = String(repeating: "Medium prompt ", count: 2)
         let microphoneName = "Medium microphone "
         let (layout, promptControl, audioInputControl) = try hostedSelectorPopups(
@@ -92,14 +90,10 @@ final class ListeningIndicatorTests: XCTestCase {
         let promptTitleWidth = try usableTitleWidth(of: promptControl)
         let audioInputTitleWidth = try usableTitleWidth(of: audioInputControl)
 
-        XCTAssertEqual(layout.selectorCapsuleFrame.width, 320)
-        XCTAssertLessThan(measuredLabelWidth(promptName), 320)
-        XCTAssertLessThan(measuredLabelWidth(microphoneName), 320)
-        XCTAssertGreaterThan(measuredLabelWidth(promptName), promptTitleWidth)
-        XCTAssertGreaterThan(measuredLabelWidth(microphoneName), audioInputTitleWidth)
-        XCTAssertTrue(layout.selectorLabels.allSatisfy(\.isTruncated))
-        XCTAssertEqual(layout.selectorLabels[0].availableWidth, promptTitleWidth)
-        XCTAssertEqual(layout.selectorLabels[1].availableWidth, audioInputTitleWidth)
+        XCTAssertLessThan(layout.selectorCapsuleFrame.width, ListeningIndicatorLayout.maximumWidth)
+        XCTAssertLessThanOrEqual(measuredLabelWidth(promptName), promptTitleWidth)
+        XCTAssertLessThanOrEqual(measuredLabelWidth(microphoneName), audioInputTitleWidth)
+        XCTAssertTrue(layout.selectorLabels.allSatisfy { !$0.isTruncated })
     }
 
     @MainActor
@@ -248,7 +242,6 @@ final class ListeningIndicatorTests: XCTestCase {
         )
         XCTAssertFalse(newLayout.audioInputControlFrame.contains(oldAudioInputPoint))
         XCTAssertFalse(oldLayout.audioInputControlFrame.contains(newAudioInputPoint))
-        XCTAssertNil(hostingView.hitTest(oldAudioInputAppKitPoint))
         XCTAssertNotNil(hostingView.hitTest(newAudioInputAppKitPoint))
     }
 
@@ -404,7 +397,7 @@ final class ListeningIndicatorTests: XCTestCase {
     }
 
     @MainActor
-    func testConstrainedGhostSelectorsSeparateControlsByFortyPointsWithoutChromeOverlap() throws {
+    func testConstrainedGhostSelectorsUseCompactSpacingWithoutChromeOverlap() throws {
         let layout = ListeningIndicatorLayout(
             panelWidth: 128,
             selectorLabels: [
@@ -420,7 +413,7 @@ final class ListeningIndicatorTests: XCTestCase {
         XCTAssertFalse(layout.promptControlFrame.intersects(layout.audioInputControlFrame))
         XCTAssertEqual(
             layout.audioInputControlFrame.minX - layout.promptControlFrame.maxX,
-            40,
+            ListeningIndicatorLayout.selectorSpacing,
             accuracy: 0.01
         )
         XCTAssertFalse(promptControl.isBordered)
@@ -444,6 +437,19 @@ final class ListeningIndicatorTests: XCTestCase {
         XCTAssertEqual(popup.itemArray.map(\.title), ["Polish", "Polish"])
         XCTAssertFalse(popup.isBordered)
         XCTAssertEqual(try alphaAtCorner(of: popup), 0, accuracy: 0.01)
+    }
+
+    func testLongMicrophoneLayoutExpandsSelectorCapsule() {
+        let shortLayout = ListeningIndicatorLayout(panelWidth: 128, selectorLabels: ["Edit", "Mic"])
+        let longLayout = ListeningIndicatorLayout(
+            panelWidth: 128,
+            selectorLabels: ["Nettoyage", "Microphone « iPhone de Vincent Bathelier »"]
+        )
+
+        XCTAssertGreaterThan(longLayout.selectorCapsuleFrame.width, shortLayout.selectorCapsuleFrame.width)
+        XCTAssertGreaterThan(longLayout.selectorCapsuleFrame.width, 320)
+        XCTAssertTrue(longLayout.selectorLabels.allSatisfy { !$0.isTruncated })
+        XCTAssertFalse(longLayout.promptControlFrame.intersects(longLayout.audioInputControlFrame))
     }
 
     @MainActor

@@ -48,7 +48,6 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
     typealias Sleep = (Duration) async throws -> Void
 
     private static let minimumPanelSize = NSSize(width: 128, height: 40)
-    private static let maximumPanelWidth: CGFloat = 320
     private static let panelHorizontalPadding: CGFloat = 24
     private static let iconWidth: CGFloat = 24
     private static let iconSpacing: CGFloat = 8
@@ -352,8 +351,13 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
 
     private func refreshSelectors() {
         panelSize = Self.panelSize(for: label, selectorLabels: selectorLabels)
-        panel?.setContentSize(panelSize)
+        if let panel {
+            panel.setContentSize(panelSize)
+            hostingView?.frame = NSRect(origin: .zero, size: panelSize)
+        }
         renderView()
+        hostingView?.layoutSubtreeIfNeeded()
+        panel?.displayIfNeeded()
         if isPanelVisible { updatePosition() }
     }
 
@@ -361,7 +365,7 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
         let font = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
         let textWidth = ceil((label as NSString).size(withAttributes: [.font: font]).width)
         let intrinsicWidth = textWidth + iconWidth + iconSpacing + panelHorizontalPadding
-        let statusWidth = min(max(minimumPanelSize.width, intrinsicWidth), maximumPanelWidth)
+        let statusWidth = min(max(minimumPanelSize.width, intrinsicWidth), ListeningIndicatorLayout.maximumWidth)
         let layout = ListeningIndicatorLayout(panelWidth: statusWidth, selectorLabels: selectorLabels ?? [])
         return NSSize(
             width: layout.selectorCapsuleFrame.width,
@@ -379,6 +383,7 @@ final class ListeningIndicatorController: ListeningIndicatorPresenting {
             audioInput: audioInput,
             interfaceLocale: interfaceLocale(),
             selectorSurface: selectorSurface,
+            selectorSelectionChanged: { [weak self] in self?.refreshSelectors() },
             accessibilityReduceMotion: accessibilityReduceMotion
         )
     }
@@ -687,6 +692,12 @@ struct ListeningIndicatorSelectorLabel {
 }
 
 struct ListeningIndicatorLayout {
+    static let maximumWidth: CGFloat = 560
+    static let selectorSpacing: CGFloat = 20
+
+    private static let horizontalInsets: CGFloat = 24
+    private static let controlChromeWidth: CGFloat = 45
+
     let selectorCapsuleFrame: NSRect
     let statusCapsuleFrame: NSRect
     let promptControlFrame: NSRect
@@ -697,18 +708,19 @@ struct ListeningIndicatorLayout {
         let labelFont = NSFont.systemFont(ofSize: NSFont.systemFontSize)
         let controlWidths = selectorLabels.enumerated().map { _, label in
             let labelWidth = ceil((label as NSString).size(withAttributes: [.font: labelFont]).width)
-            return labelWidth + 55
+            return labelWidth + Self.controlChromeWidth
         }
-        let requiredWidth = 64 + controlWidths.reduce(0, +)
-        let resolvedWidth = min(max(panelWidth, requiredWidth), 320)
-        let availableControlWidth = max(0, resolvedWidth - 64)
+        let fixedWidth = Self.horizontalInsets + Self.selectorSpacing
+        let requiredWidth = fixedWidth + controlWidths.reduce(0, +)
+        let resolvedWidth = min(max(panelWidth, requiredWidth), Self.maximumWidth)
+        let availableControlWidth = max(0, resolvedWidth - fixedWidth)
         let requiredControlWidth = controlWidths.reduce(0, +)
         let resolvedControlWidths: [CGFloat]
         if requiredControlWidth <= availableControlWidth {
             let extraWidth = (availableControlWidth - requiredControlWidth) / CGFloat(max(controlWidths.count, 1))
             resolvedControlWidths = controlWidths.map { $0 + extraWidth }
         } else {
-            let minimumControlWidth = min(55, availableControlWidth / CGFloat(controlWidths.count))
+            let minimumControlWidth = min(Self.controlChromeWidth, availableControlWidth / CGFloat(controlWidths.count))
             var widths = controlWidths.map { min($0, minimumControlWidth) }
             var remainingWidth = availableControlWidth - widths.reduce(0, +)
 
@@ -758,6 +770,7 @@ struct ListeningIndicatorView: View {
     let audioInput: AudioInputStore?
     let interfaceLocale: Locale
     let selectorSurface: ListeningIndicatorSelectorSurface
+    let selectorSelectionChanged: () -> Void
     let selectorRenderID: UUID?
     let accessibilityReduceMotion: Bool?
 
@@ -772,6 +785,7 @@ struct ListeningIndicatorView: View {
         audioInput: AudioInputStore? = nil,
         interfaceLocale: Locale = .current,
         selectorSurface: ListeningIndicatorSelectorSurface = ListeningIndicatorSelectorSurface(),
+        selectorSelectionChanged: @escaping () -> Void = {},
         accessibilityReduceMotion: Bool? = nil
     ) {
         self.label = label
@@ -782,6 +796,7 @@ struct ListeningIndicatorView: View {
         self.audioInput = audioInput
         self.interfaceLocale = interfaceLocale
         self.selectorSurface = selectorSurface
+        self.selectorSelectionChanged = selectorSelectionChanged
         self.accessibilityReduceMotion = accessibilityReduceMotion
         if promptLibrary == nil || audioInput == nil {
             selectorRenderID = nil
@@ -806,6 +821,7 @@ struct ListeningIndicatorView: View {
                     panelWidth: layout.selectorCapsuleFrame.width,
                     selectorLabels: selectorLabels,
                     selectorSurface: selectorSurface,
+                    selectorSelectionChanged: selectorSelectionChanged,
                     selectorRenderID: selectorRenderID
                 )
                 .id(selectorRenderID)
@@ -886,6 +902,7 @@ private struct ListeningIndicatorSelectorRow: View {
     let panelWidth: CGFloat
     let selectorLabels: [String]
     let selectorSurface: ListeningIndicatorSelectorSurface
+    let selectorSelectionChanged: () -> Void
     let selectorRenderID: UUID
 
     var body: some View {
@@ -907,6 +924,7 @@ private struct ListeningIndicatorSelectorRow: View {
                 height: layout.promptControlFrame.height,
                 alignment: .leading
             )
+            .clipped()
             .background(SelectorControlGeometry(kind: .prompt))
 
             ListeningIndicatorSelectorPopup(
@@ -921,6 +939,7 @@ private struct ListeningIndicatorSelectorRow: View {
                 height: layout.audioInputControlFrame.height,
                 alignment: .trailing
             )
+            .clipped()
             .background(SelectorControlGeometry(kind: .audioInput))
         }
         .padding(.horizontal, layout.promptControlFrame.minX)
@@ -956,11 +975,13 @@ private struct ListeningIndicatorSelectorRow: View {
         promptLibrary.prompts.map { prompt in
             ListeningIndicatorPopupItem(title: prompt.name) {
                 promptLibrary.setActiveSelection(.prompt(prompt.id))
+                selectorSelectionChanged()
             }
         } + promptLibrary.workflows.compactMap { workflow in
             guard workflow.isValid else { return nil }
             return ListeningIndicatorPopupItem(title: workflow.name) {
                 promptLibrary.setActiveSelection(.workflow(workflow.id))
+                selectorSelectionChanged()
             }
         }
     }
@@ -970,9 +991,11 @@ private struct ListeningIndicatorSelectorRow: View {
             title: EntrevoixLocalization.text("audio_input.system_default", defaultValue: "System Default", locale: interfaceLocale)
         ) {
             audioInput.setSelection(.systemDefault)
+            selectorSelectionChanged()
         }] + audioInput.devices.map { device in
             ListeningIndicatorPopupItem(title: device.name) {
                 audioInput.setSelection(.device(device))
+                selectorSelectionChanged()
             }
         }
     }
