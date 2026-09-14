@@ -276,6 +276,14 @@ final class AppStore {
             }
         )
         self.promptLibrary = promptLibrary
+        dependencies.listeningIndicator.configureSelectors(
+            promptLibrary: promptLibrary,
+            audioInput: audioInput,
+            interfaceLocale: { [weak preferencesModel] in
+                guard let preferencesModel else { return .current }
+                return EntrevoixLocalization.locale(for: preferencesModel.preferences.interfaceLanguage)
+            }
+        )
         cleanupLibraryCloudSync.onRemoteLibrary = { [weak preferencesModel] library in
             guard let preferencesModel else { return }
             var preferences = preferencesModel.preferences
