@@ -848,7 +848,7 @@ struct ListeningIndicatorView: View {
             .padding(.horizontal, 12)
             .frame(maxWidth: .infinity)
             .frame(height: layout.statusCapsuleFrame.height)
-            .background(.regularMaterial, in: Capsule())
+            .glassEffect(.regular, in: Capsule())
         }
         .frame(
             width: layout.selectorCapsuleFrame.width,
@@ -944,7 +944,7 @@ private struct ListeningIndicatorSelectorRow: View {
         }
         .padding(.horizontal, layout.promptControlFrame.minX)
         .frame(width: layout.selectorCapsuleFrame.width, height: layout.selectorCapsuleFrame.height)
-        .background(.regularMaterial, in: Capsule())
+        .glassEffect(.regular, in: Capsule())
         .onPreferenceChange(SelectorControlFramesKey.self) { frames in
             if let promptFrame = frames[.prompt], let audioInputFrame = frames[.audioInput] {
                 selectorSurface.registerRenderedControls(
