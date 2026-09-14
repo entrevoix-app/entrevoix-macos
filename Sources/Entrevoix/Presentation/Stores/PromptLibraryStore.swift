@@ -30,6 +30,8 @@ final class PromptLibraryStore {
     }
 
     var activeSelection: CleanupTransformationSelection? { preferences.activeCleanupSelection }
+    var prompts: [CleanupPrompt] { preferences.cleanupPrompts }
+    var workflows: [CleanupWorkflow] { preferences.cleanupWorkflows }
 
     func makeExport() -> CleanupPromptExport {
         CleanupPromptExport(prompts: preferences.cleanupPrompts)
