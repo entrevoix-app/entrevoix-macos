@@ -5,6 +5,33 @@ import EntrevoixCore
 import Foundation
 import Synchronization
 
+enum AudioCaptureFailure: Equatable, Sendable {
+    case frameCapacity
+    case audioUnitRender(OSStatus)
+    case copy
+    case pool
+    case writerProcessing
+
+    var category: String {
+        switch self {
+        case .frameCapacity: "frameCapacity"
+        case .audioUnitRender: "audioUnitRender"
+        case .copy: "copy"
+        case .pool: "pool"
+        case .writerProcessing: "writerProcessing"
+        }
+    }
+
+    var status: OSStatus {
+        switch self {
+        case .frameCapacity, .copy: kAudio_ParamError
+        case .audioUnitRender(let status): status
+        case .pool: kAudio_MemFullError
+        case .writerProcessing: kAudio_UnimplementedError
+        }
+    }
+}
+
 @MainActor
 protocol AudioLevelProviding: AnyObject {
     func updateMeters()
@@ -61,11 +88,18 @@ final class AudioRecorder: AudioRecording, AudioLevelProviding {
         at url: URL,
         input: AudioInputSelection
     ) throws {
-        let engine = try captureEngine(for: input)
+        let engine: any AudioCaptureEngine
+        do {
+            engine = try captureEngine(for: input)
+        } catch {
+            logger.log("Audio input selection failed (requested input; no fallback).")
+            throw error
+        }
         let inputFormat = engine.inputFormat
-        guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
+        guard Self.isSupportedCaptureFormat(inputFormat) else {
             engine.discard()
             preparedEngine = nil
+            logger.log("Audio input selection failed (requested input; unsupported source format).")
             throw RecorderError.couldNotStart
         }
 
@@ -75,24 +109,40 @@ final class AudioRecorder: AudioRecording, AudioLevelProviding {
             activeEngine = engine
             captureWriter = writer
             currentURL = url
+            logger.log("Audio input selection succeeded (requested input; source \(Self.formatDiagnostic(inputFormat))).")
         } catch {
             engine.discard()
             preparedEngine = nil
             try? FileManager.default.removeItem(at: url)
+            logger.log("Audio input capture failed (requested input; source \(Self.formatDiagnostic(inputFormat))).")
             throw error
         }
+    }
+
+    private static func isSupportedCaptureFormat(_ format: AVAudioFormat) -> Bool {
+        guard format.sampleRate > 0,
+              format.channelCount > 0,
+              format.streamDescription.pointee.mFormatID == kAudioFormatLinearPCM,
+              let floatFormat = AVAudioFormat(
+                  commonFormat: .pcmFormatFloat32,
+                  sampleRate: format.sampleRate,
+                  channels: format.channelCount,
+                  interleaved: false
+              ) else {
+            return false
+        }
+        return AVAudioConverter(from: format, to: floatFormat) != nil
+    }
+
+    private static func formatDiagnostic(_ format: AVAudioFormat) -> String {
+        let encoding = format.commonFormat == .pcmFormatFloat32 ? "float32" : "linear-pcm"
+        return "rate=\(Int(format.sampleRate)) channels=\(format.channelCount) encoding=\(encoding)"
     }
 
     /// Keep only the selected input's prepared engine to avoid startup latency.
     /// Discarding the previous selection prevents a paused Bluetooth input from
     /// retaining its hands-free profile after the user switches microphones.
     private func captureEngine(for input: AudioInputSelection) throws -> any AudioCaptureEngine {
-        if let preparedEngine,
-           preparedEngine.input == input,
-           preparedEngine.engine.isReusable(for: input) {
-            return preparedEngine.engine
-        }
-
         preparedEngine?.engine.discard()
         preparedEngine = nil
 
@@ -152,9 +202,13 @@ final class AudioRecorder: AudioRecording, AudioLevelProviding {
         self.captureWriter = nil
 
         let result = captureWriter.finish()
+        let failure = captureWriter.failure
         if result != .success, let currentURL {
             try? FileManager.default.removeItem(at: currentURL)
             self.currentURL = nil
+        }
+        if let failure {
+            logger.log("Audio input capture failed (category=\(failure.category) status=\(failure.status)).")
         }
         return result
     }
@@ -224,10 +278,20 @@ final class HALInputCaptureEngine: AudioCaptureEngine {
 
         let audioUnit = try Self.makeInputOnlyAudioUnit()
         do {
-            try Self.setCurrentDevice(deviceID, on: audioUnit)
-            let inputFormat = try Self.configureClientFormat(on: audioUnit)
-            let context = try HALInputCaptureContext(inputFormat: inputFormat, audioUnit: audioUnit)
-            try Self.installInputCallback(context, on: audioUnit)
+            let configurator = CoreAudioHALInputConfigurator(audioUnit: audioUnit)
+            var configuredContext: HALInputCaptureContext?
+            let inputFormat = try Self.configureAUHAL(
+                deviceID: deviceID,
+                using: configurator
+            ) { inputFormat in
+                let context = try HALInputCaptureContext(inputFormat: inputFormat, audioUnit: audioUnit)
+                configuredContext = context
+                return AURenderCallbackStruct(
+                    inputProc: halInputCallback,
+                    inputProcRefCon: Unmanaged.passUnretained(context).toOpaque()
+                )
+            }
+            guard let context = configuredContext else { throw RecorderError.couldNotStart }
             try Self.initialize(audioUnit)
 
             self.audioUnit = audioUnit
@@ -295,97 +359,21 @@ final class HALInputCaptureEngine: AudioCaptureEngine {
             throw RecorderError.audioDevice(creationStatus)
         }
 
-        do {
-            var enabled: UInt32 = 1
-            try check(AudioUnitSetProperty(
-                audioUnit,
-                kAudioOutputUnitProperty_EnableIO,
-                kAudioUnitScope_Input,
-                1,
-                &enabled,
-                UInt32(MemoryLayout<UInt32>.size)
-            ))
-
-            var disabled: UInt32 = 0
-            try check(AudioUnitSetProperty(
-                audioUnit,
-                kAudioOutputUnitProperty_EnableIO,
-                kAudioUnitScope_Output,
-                0,
-                &disabled,
-                UInt32(MemoryLayout<UInt32>.size)
-            ))
-            return audioUnit
-        } catch {
-            AudioComponentInstanceDispose(audioUnit)
-            throw error
-        }
+        return audioUnit
     }
 
-    private nonisolated static func setCurrentDevice(
-        _ deviceID: AudioDeviceID,
-        on audioUnit: AudioUnit
-    ) throws {
-        var mutableDeviceID = deviceID
-        try check(AudioUnitSetProperty(
-            audioUnit,
-            kAudioOutputUnitProperty_CurrentDevice,
-            kAudioUnitScope_Global,
-            0,
-            &mutableDeviceID,
-            UInt32(MemoryLayout<AudioDeviceID>.size)
-        ))
-    }
-
-    private nonisolated static func configureClientFormat(on audioUnit: AudioUnit) throws -> AVAudioFormat {
-        var deviceFormat = AudioStreamBasicDescription()
-        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
-        try check(AudioUnitGetProperty(
-            audioUnit,
-            kAudioUnitProperty_StreamFormat,
-            kAudioUnitScope_Input,
-            1,
-            &deviceFormat,
-            &size
-        ))
-        guard deviceFormat.mSampleRate > 0, deviceFormat.mChannelsPerFrame > 0,
-              let format = AVAudioFormat(
-                  commonFormat: .pcmFormatFloat32,
-                  sampleRate: deviceFormat.mSampleRate,
-                  channels: deviceFormat.mChannelsPerFrame,
-                  interleaved: false
-              ) else {
-            throw RecorderError.couldNotStart
-        }
-
-        var clientDescription = format.streamDescription.pointee
-        try check(AudioUnitSetProperty(
-            audioUnit,
-            kAudioUnitProperty_StreamFormat,
-            kAudioUnitScope_Output,
-            1,
-            &clientDescription,
-            UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
-        ))
-        return format
-    }
-
-    private nonisolated static func installInputCallback(
-        _ context: HALInputCaptureContext,
-        on audioUnit: AudioUnit
-    ) throws {
-        var callback = AURenderCallbackStruct(
-            inputProc: halInputCallback,
-            inputProcRefCon: Unmanaged.passUnretained(context).toOpaque()
-        )
-        try check(AudioUnitSetProperty(
-            audioUnit,
-            kAudioOutputUnitProperty_SetInputCallback,
-            kAudioUnitScope_Global,
-            0,
-            &callback,
-            UInt32(MemoryLayout<AURenderCallbackStruct>.size)
-        ))
+    static func configureAUHAL(
+        deviceID: AudioDeviceID,
+        using configurator: any HALInputAudioUnitConfiguring,
+        makeCallback: (AVAudioFormat) throws -> AURenderCallbackStruct
+    ) throws -> AVAudioFormat {
+        try configurator.setIO(enabled: 1, scope: kAudioUnitScope_Input, element: 1)
+        try configurator.setIO(enabled: 0, scope: kAudioUnitScope_Output, element: 0)
+        try configurator.setDevice(deviceID, scope: kAudioUnitScope_Global, element: 0)
+        let inputFormat = try configurator.inputFormat(scope: kAudioUnitScope_Input, element: 1)
+        let clientFormat = try configurator.setClientFormat(inputFormat, scope: kAudioUnitScope_Output, element: 1)
+        try configurator.installInputCallback(try makeCallback(clientFormat), scope: kAudioUnitScope_Global, element: 0)
+        return clientFormat
     }
 
     private nonisolated static func initialize(_ audioUnit: AudioUnit) throws {
@@ -449,27 +437,107 @@ final class HALInputCaptureEngine: AudioCaptureEngine {
     }
 }
 
+@MainActor
+protocol HALInputAudioUnitConfiguring: AnyObject {
+    func setIO(enabled: UInt32, scope: AudioUnitScope, element: AudioUnitElement) throws
+    func setDevice(_ deviceID: AudioDeviceID, scope: AudioUnitScope, element: AudioUnitElement) throws
+    func inputFormat(scope: AudioUnitScope, element: AudioUnitElement) throws -> AVAudioFormat
+    func setClientFormat(_ format: AVAudioFormat, scope: AudioUnitScope, element: AudioUnitElement) throws -> AVAudioFormat
+    func installInputCallback(_ callback: AURenderCallbackStruct, scope: AudioUnitScope, element: AudioUnitElement) throws
+}
+
+@MainActor
+private final class CoreAudioHALInputConfigurator: HALInputAudioUnitConfiguring {
+    private let audioUnit: AudioUnit
+    private var nativeInputDescription: AudioStreamBasicDescription?
+
+    init(audioUnit: AudioUnit) {
+        self.audioUnit = audioUnit
+    }
+
+    func setIO(enabled: UInt32, scope: AudioUnitScope, element: AudioUnitElement) throws {
+        var enabled = enabled
+        try check(AudioUnitSetProperty(audioUnit, kAudioOutputUnitProperty_EnableIO, scope, element, &enabled, UInt32(MemoryLayout<UInt32>.size)))
+    }
+
+    func setDevice(_ deviceID: AudioDeviceID, scope: AudioUnitScope, element: AudioUnitElement) throws {
+        var deviceID = deviceID
+        try check(AudioUnitSetProperty(audioUnit, kAudioOutputUnitProperty_CurrentDevice, scope, element, &deviceID, UInt32(MemoryLayout<AudioDeviceID>.size)))
+    }
+
+    func inputFormat(scope: AudioUnitScope, element: AudioUnitElement) throws -> AVAudioFormat {
+        var description = AudioStreamBasicDescription()
+        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        try check(AudioUnitGetProperty(audioUnit, kAudioUnitProperty_StreamFormat, scope, element, &description, &size))
+        guard description.mSampleRate > 0, description.mChannelsPerFrame > 0,
+              let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: description.mSampleRate, channels: description.mChannelsPerFrame, interleaved: false) else {
+            throw RecorderError.couldNotStart
+        }
+        nativeInputDescription = description
+        return format
+    }
+
+    func setClientFormat(_ format: AVAudioFormat, scope: AudioUnitScope, element: AudioUnitElement) throws -> AVAudioFormat {
+        var description = format.streamDescription.pointee
+        let status = AudioUnitSetProperty(audioUnit, kAudioUnitProperty_StreamFormat, scope, element, &description, UInt32(MemoryLayout<AudioStreamBasicDescription>.size))
+        guard status != noErr else { return format }
+        guard var nativeInputDescription,
+              let nativeFormat = AVAudioFormat(streamDescription: &nativeInputDescription),
+              nativeFormat.streamDescription.pointee.mFormatID == kAudioFormatLinearPCM else {
+            throw RecorderError.couldNotStart
+        }
+        try check(AudioUnitSetProperty(audioUnit, kAudioUnitProperty_StreamFormat, scope, element, &nativeInputDescription, UInt32(MemoryLayout<AudioStreamBasicDescription>.size)))
+        return nativeFormat
+    }
+
+    func installInputCallback(_ callback: AURenderCallbackStruct, scope: AudioUnitScope, element: AudioUnitElement) throws {
+        var callback = callback
+        try check(AudioUnitSetProperty(audioUnit, kAudioOutputUnitProperty_SetInputCallback, scope, element, &callback, UInt32(MemoryLayout<AURenderCallbackStruct>.size)))
+    }
+
+    private func check(_ status: OSStatus) throws {
+        guard status == noErr else { throw RecorderError.audioDevice(status) }
+    }
+}
+
 /// Bridges the AUHAL realtime callback to the asynchronous WAV writer.
 ///
 /// `state` serializes the callback with start/stop on the main actor. This is
 /// required because `AudioOutputUnitStop` can overlap a final render callback;
 /// closing the writer before that callback completes would race the WAV file.
-private final class HALInputCaptureContext: @unchecked Sendable {
+typealias AudioUnitRenderFunction = (
+    AudioUnit,
+    UnsafeMutablePointer<AudioUnitRenderActionFlags>,
+    UnsafePointer<AudioTimeStamp>,
+    UInt32,
+    UInt32,
+    UnsafeMutablePointer<AudioBufferList>
+) -> OSStatus
+
+final class HALInputCaptureContext: @unchecked Sendable {
     private static let chunkFrameCapacity: AVAudioFrameCount = 8_192
     private static let pooledChunkCount = 8
 
     private struct State {
         var writer: AudioCaptureWriter?
         var activeChunk: AudioCaptureBuffer?
+        var failNextCopyForTesting = false
+        var failNextChunkCheckoutForTesting = false
     }
 
     private let audioUnit: AudioUnit
+    private let audioUnitRender: AudioUnitRenderFunction
     private let renderBuffer: AVAudioPCMBuffer
     private let chunkPool: AudioCaptureBufferPool
     private let state: Mutex<State>
 
-    init(inputFormat: AVAudioFormat, audioUnit: AudioUnit) throws {
+    init(
+        inputFormat: AVAudioFormat,
+        audioUnit: AudioUnit,
+        audioUnitRender: @escaping AudioUnitRenderFunction = AudioUnitRender
+    ) throws {
         self.audioUnit = audioUnit
+        self.audioUnitRender = audioUnitRender
         guard let renderBuffer = AVAudioPCMBuffer(
             pcmFormat: inputFormat,
             frameCapacity: Self.chunkFrameCapacity
@@ -519,16 +587,15 @@ private final class HALInputCaptureContext: @unchecked Sendable {
     func render(
         actionFlags: UnsafeMutablePointer<AudioUnitRenderActionFlags>,
         timeStamp: UnsafePointer<AudioTimeStamp>,
-        busNumber: UInt32,
+        busNumber _: UInt32,
         frameCount: UInt32
     ) -> OSStatus {
         state.withLock { state in
             guard let writer = state.writer, let activeChunk = state.activeChunk else {
                 return noErr
             }
-            let activeBuffer = activeChunk.buffer
             guard renderBuffer.frameCapacity >= frameCount else {
-                writer.markFailed()
+                writer.markFailed(.frameCapacity)
                 return kAudio_ParamError
             }
 
@@ -536,35 +603,73 @@ private final class HALInputCaptureContext: @unchecked Sendable {
             // frameLength. AudioUnitRender needs the writable byte capacity,
             // not an empty buffer, otherwise it rejects the callback with -50.
             renderBuffer.frameLength = frameCount
-            let status = AudioUnitRender(
+            let status = audioUnitRender(
                 audioUnit,
                 actionFlags,
                 timeStamp,
-                busNumber,
+                1,
                 frameCount,
                 renderBuffer.mutableAudioBufferList
             )
-            guard status == noErr else { return status }
-
-            guard copy(renderBuffer, into: activeBuffer, frameCount: frameCount) else {
-                writer.markFailed()
-                return noErr
-            }
-            guard activeBuffer.frameLength == activeBuffer.frameCapacity else {
-                return noErr
-            }
-            guard let nextChunk = chunkPool.checkout() else {
-                writer.markFailed()
-                state.writer = nil
-                state.activeChunk = nil
-                chunkPool.checkin(activeChunk)
-                return noErr
+            guard status == noErr else {
+                writer.markFailed(.audioUnitRender(status))
+                return status
             }
 
-            state.activeChunk = nextChunk
-            enqueue(activeChunk, with: writer)
+            let shouldFailCopy = state.failNextCopyForTesting
+            state.failNextCopyForTesting = false
+            guard !shouldFailCopy else {
+                writer.markFailed(.copy)
+                return noErr
+            }
+            var sourceOffset: AVAudioFrameCount = 0
+            var remainingFrameCount = frameCount
+            var currentChunk = activeChunk
+            while remainingFrameCount > 0 {
+                let activeBuffer = currentChunk.buffer
+                let copiedFrameCount = min(
+                    remainingFrameCount,
+                    activeBuffer.frameCapacity - activeBuffer.frameLength
+                )
+                guard copiedFrameCount > 0,
+                      copy(
+                          renderBuffer,
+                          sourceFrameOffset: sourceOffset,
+                          into: activeBuffer,
+                          frameCount: copiedFrameCount
+                      ) else {
+                    writer.markFailed(.copy)
+                    return noErr
+                }
+                sourceOffset += copiedFrameCount
+                remainingFrameCount -= copiedFrameCount
+                guard activeBuffer.frameLength == activeBuffer.frameCapacity else {
+                    continue
+                }
+                let shouldFailCheckout = state.failNextChunkCheckoutForTesting
+                state.failNextChunkCheckoutForTesting = false
+                guard !shouldFailCheckout, let nextChunk = chunkPool.checkout() else {
+                    writer.markFailed(.pool)
+                    state.writer = nil
+                    state.activeChunk = nil
+                    chunkPool.checkin(currentChunk)
+                    return noErr
+                }
+
+                state.activeChunk = nextChunk
+                enqueue(currentChunk, with: writer)
+                currentChunk = nextChunk
+            }
             return noErr
         }
+    }
+
+    func failNextCopyForTesting() {
+        state.withLock { $0.failNextCopyForTesting = true }
+    }
+
+    func failNextChunkCheckoutForTesting() {
+        state.withLock { $0.failNextChunkCheckoutForTesting = true }
     }
 
     private func flushActiveChunk() {
@@ -592,21 +697,27 @@ private final class HALInputCaptureContext: @unchecked Sendable {
 
     private func copy(
         _ source: AVAudioPCMBuffer,
+        sourceFrameOffset: AVAudioFrameCount,
         into destination: AVAudioPCMBuffer,
         frameCount: AVAudioFrameCount
     ) -> Bool {
         let destinationOffset = destination.frameLength
-        guard destination.frameCapacity - destinationOffset >= frameCount,
-              let sourceChannels = source.floatChannelData,
-              let destinationChannels = destination.floatChannelData,
-              source.format.channelCount == destination.format.channelCount else {
+        guard source.frameLength - sourceFrameOffset >= frameCount,
+              destination.frameCapacity - destinationOffset >= frameCount,
+              source.format == destination.format else {
             return false
         }
-        let byteCount = Int(frameCount) * MemoryLayout<Float>.stride
-        for channel in 0..<Int(source.format.channelCount) {
+        let sourceBuffers = UnsafeMutableAudioBufferListPointer(source.mutableAudioBufferList)
+        let destinationBuffers = UnsafeMutableAudioBufferListPointer(destination.mutableAudioBufferList)
+        guard sourceBuffers.count == destinationBuffers.count else { return false }
+        let byteCount = Int(frameCount) * Int(source.format.streamDescription.pointee.mBytesPerFrame)
+        for (sourceBuffer, destinationBuffer) in zip(sourceBuffers, destinationBuffers) {
+            guard let sourceData = sourceBuffer.mData, let destinationData = destinationBuffer.mData else {
+                return false
+            }
             memcpy(
-                destinationChannels[channel].advanced(by: Int(destinationOffset)),
-                sourceChannels[channel],
+                destinationData.advanced(by: Int(destinationOffset) * Int(destination.format.streamDescription.pointee.mBytesPerFrame)),
+                sourceData.advanced(by: Int(sourceFrameOffset) * Int(source.format.streamDescription.pointee.mBytesPerFrame)),
                 byteCount
             )
         }
@@ -709,13 +820,16 @@ final class AudioCaptureWriter: Sendable {
     }
 
     private struct State {
+        let inputConverter: AVAudioConverter?
+        let floatInputFormat: AVAudioFormat
         let converter: AVAudioConverter
         let converterInputFormat: AVAudioFormat
         let file: AVAudioFile
         let outputFormat: AVAudioFormat
         var averagePower: Float = -160
         var didWriteFrames = false
-        var didFail = false
+        var failure: AudioCaptureFailure?
+        var failNextProcessingForTesting = false
         var isFinished = false
     }
 
@@ -727,6 +841,30 @@ final class AudioCaptureWriter: Sendable {
     private let pendingWrites = DispatchGroup()
 
     init(inputFormat: AVAudioFormat, outputURL: URL) throws {
+        guard inputFormat.sampleRate > 0,
+              inputFormat.channelCount > 0,
+              inputFormat.streamDescription.pointee.mFormatID == kAudioFormatLinearPCM else {
+            throw RecorderError.couldNotStart
+        }
+
+        let floatInputFormat: AVAudioFormat
+        let inputConverter: AVAudioConverter?
+        if inputFormat.commonFormat == .pcmFormatFloat32, !inputFormat.isInterleaved {
+            floatInputFormat = inputFormat
+            inputConverter = nil
+        } else {
+            guard let format = AVAudioFormat(
+                commonFormat: .pcmFormatFloat32,
+                sampleRate: inputFormat.sampleRate,
+                channels: inputFormat.channelCount,
+                interleaved: false
+            ), let converter = AVAudioConverter(from: inputFormat, to: format) else {
+                throw RecorderError.couldNotStart
+            }
+            floatInputFormat = format
+            inputConverter = converter
+        }
+
         guard let converterInputFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
             sampleRate: inputFormat.sampleRate,
@@ -748,6 +886,8 @@ final class AudioCaptureWriter: Sendable {
             interleaved: true
         )
         state = Mutex(State(
+            inputConverter: inputConverter,
+            floatInputFormat: floatInputFormat,
             converter: converter,
             converterInputFormat: converterInputFormat,
             file: file,
@@ -757,6 +897,10 @@ final class AudioCaptureWriter: Sendable {
 
     var averagePower: Float {
         state.withLock { $0.averagePower }
+    }
+
+    var failure: AudioCaptureFailure? {
+        state.withLock { $0.failure }
     }
 
     /// Called from the realtime callback only after it has filled a pooled
@@ -770,22 +914,38 @@ final class AudioCaptureWriter: Sendable {
         }
     }
 
-    func markFailed() {
-        state.withLock { $0.didFail = true }
+    func markFailed(_ failure: AudioCaptureFailure) {
+        state.withLock {
+            guard $0.failure == nil else { return }
+            $0.failure = failure
+        }
+    }
+
+    func failNextProcessingForTesting() {
+        state.withLock { $0.failNextProcessingForTesting = true }
     }
 
     func append(_ input: AVAudioPCMBuffer) {
         state.withLock { state in
-            guard !state.isFinished, !state.didFail else { return }
-            state.averagePower = Self.averagePower(for: input)
-
-            guard let monoInput = Self.downmixToMono(
-                input,
-                format: state.converterInputFormat
-            ) else {
-                state.didFail = true
+            guard !state.isFinished, state.failure == nil else { return }
+            if state.failNextProcessingForTesting {
+                state.failNextProcessingForTesting = false
+                state.failure = .writerProcessing
                 return
             }
+
+            guard let floatInput = Self.floatBuffer(
+                from: input,
+                converter: state.inputConverter,
+                format: state.floatInputFormat
+            ), let monoInput = Self.downmixToMono(
+                floatInput,
+                format: state.converterInputFormat
+            ) else {
+                state.failure = .writerProcessing
+                return
+            }
+            state.averagePower = Self.averagePower(for: floatInput)
 
             let convertedFrameCount = max(
                 Int(monoInput.frameLength),
@@ -795,7 +955,7 @@ final class AudioCaptureWriter: Sendable {
                 pcmFormat: state.outputFormat,
                 frameCapacity: AVAudioFrameCount(convertedFrameCount)
             ) else {
-                state.didFail = true
+                state.failure = .writerProcessing
                 return
             }
 
@@ -805,14 +965,14 @@ final class AudioCaptureWriter: Sendable {
                 source.next(into: inputStatus)
             }
             guard conversionError == nil, status != .error, output.frameLength > 0 else {
-                state.didFail = true
+                state.failure = .writerProcessing
                 return
             }
             do {
                 try state.file.write(from: output)
                 state.didWriteFrames = true
             } catch {
-                state.didFail = true
+                state.failure = .writerProcessing
             }
         }
     }
@@ -823,11 +983,11 @@ final class AudioCaptureWriter: Sendable {
         pendingWrites.wait()
         return state.withLock { state -> Result in
             guard !state.isFinished else {
-                return state.didFail ? .failed : (state.didWriteFrames ? .success : .empty)
+                return state.failure == nil ? (state.didWriteFrames ? .success : .empty) : .failed
             }
             state.isFinished = true
             state.file.close()
-            return state.didFail ? .failed : (state.didWriteFrames ? .success : .empty)
+            return state.failure == nil ? (state.didWriteFrames ? .success : .empty) : .failed
         }
     }
 
@@ -856,6 +1016,24 @@ final class AudioCaptureWriter: Sendable {
             }
             outputSamples[frame] = mixedSample * scale
         }
+        return output
+    }
+
+    private static func floatBuffer(
+        from input: AVAudioPCMBuffer,
+        converter: AVAudioConverter?,
+        format: AVAudioFormat
+    ) -> AVAudioPCMBuffer? {
+        guard let converter else { return input }
+        guard let output = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: input.frameLength) else {
+            return nil
+        }
+        let source = ConverterInputBlockSource(input)
+        var error: NSError?
+        let status = converter.convert(to: output, error: &error) { _, inputStatus in
+            source.next(into: inputStatus)
+        }
+        guard error == nil, status != .error, output.frameLength > 0 else { return nil }
         return output
     }
 

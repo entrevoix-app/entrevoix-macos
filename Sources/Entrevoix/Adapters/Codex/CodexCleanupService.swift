@@ -20,7 +20,7 @@ struct CodexCleanupService: TextCleaning {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CodexCleanupError.emptyInput }
         let policy = request.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !policy.isEmpty else { throw CodexCleanupError.emptyPrompt }
-        let instructions = CleanupTransformationPolicy.systemInstructions
+        let instructions = CleanupTransformationPolicy.systemInstructions(language: request.language)
         let input = CleanupTransformationPolicy.input(instructions: policy, transcript: text)
 
         let credentials = try await credentialsProvider.validCredentials()

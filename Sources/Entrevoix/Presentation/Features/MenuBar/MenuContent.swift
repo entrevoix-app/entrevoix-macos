@@ -84,38 +84,40 @@ struct MenuContent: View {
         }
 
         Menu(EntrevoixLocalization.text("menu.prompt", defaultValue: "Prompt", locale: locale)) {
-            Section(EntrevoixLocalization.text("menu.prompts_group", defaultValue: "Prompts", locale: locale)) {
-                if model.preferences.cleanupPrompts.isEmpty {
-                    Text(EntrevoixLocalization.text("prompts.none", defaultValue: "No prompts saved", locale: locale))
-                } else {
-                    ForEach(model.preferences.cleanupPrompts) { prompt in
-                        Button {
-                            model.setActiveCleanupPrompt(prompt.id)
-                        } label: {
-                            transformationMenuLabel(
-                                prompt.name,
-                                selection: .prompt(prompt.id),
-                                locale: locale
-                            )
+            if model.preferences.cleanupEnabled {
+                Section(EntrevoixLocalization.text("menu.prompts_group", defaultValue: "Prompts", locale: locale)) {
+                    if model.preferences.cleanupPrompts.isEmpty {
+                        Text(EntrevoixLocalization.text("prompts.none", defaultValue: "No prompts saved", locale: locale))
+                    } else {
+                        ForEach(model.preferences.cleanupPrompts) { prompt in
+                            Button {
+                                model.setActiveCleanupPrompt(prompt.id)
+                            } label: {
+                                transformationMenuLabel(
+                                    prompt.name,
+                                    selection: .prompt(prompt.id),
+                                    locale: locale
+                                )
+                            }
                         }
                     }
                 }
-            }
-            Section(EntrevoixLocalization.text("menu.workflows_group", defaultValue: "Workflows", locale: locale)) {
-                if model.preferences.cleanupWorkflows.isEmpty {
-                    Text(EntrevoixLocalization.text("workflows.none", defaultValue: "No workflows saved", locale: locale))
-                } else {
-                    ForEach(model.preferences.cleanupWorkflows) { workflow in
-                        Button {
-                            model.setActiveCleanupWorkflow(workflow.id)
-                        } label: {
-                            transformationMenuLabel(
-                                workflow.name,
-                                selection: .workflow(workflow.id),
-                                locale: locale
-                            )
+                Section(EntrevoixLocalization.text("menu.workflows_group", defaultValue: "Workflows", locale: locale)) {
+                    if model.preferences.cleanupWorkflows.isEmpty {
+                        Text(EntrevoixLocalization.text("workflows.none", defaultValue: "No workflows saved", locale: locale))
+                    } else {
+                        ForEach(model.preferences.cleanupWorkflows) { workflow in
+                            Button {
+                                model.setActiveCleanupWorkflow(workflow.id)
+                            } label: {
+                                transformationMenuLabel(
+                                    workflow.name,
+                                    selection: .workflow(workflow.id),
+                                    locale: locale
+                                )
+                            }
+                            .disabled(!workflow.isValid)
                         }
-                        .disabled(!workflow.isValid)
                     }
                 }
             }
