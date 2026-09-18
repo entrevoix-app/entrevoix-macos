@@ -35,7 +35,7 @@ public struct AppleFoundationCleanupService: TextCleaning {
         let input = CleanupTransformationPolicy.input(instructions: request.prompt, transcript: text)
         let model = SystemLanguageModel(useCase: .general, guardrails: .permissiveContentTransformations)
         let session = LanguageModelSession(model: model, instructions: instructions)
-        let response = try await session.respond(to: input, options: GenerationOptions(sampling: .greedy))
+        let response = try await session.respond(to: input, options: GenerationOptions(samplingMode: .greedy))
         let result = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !result.isEmpty else { throw AppleProviderError(capability: .ttt, reason: .missingConfiguration) }
         return CleanupTransformationPolicy.shouldUseRawTranscript(
