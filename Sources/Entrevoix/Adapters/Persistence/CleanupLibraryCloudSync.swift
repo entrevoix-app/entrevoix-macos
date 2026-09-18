@@ -12,7 +12,7 @@ protocol CleanupLibraryCloudStoring {
 
 @MainActor
 final class CleanupLibraryCloudSync {
-    static let subscriptionID = "cleanup-library-v2-macos"
+    nonisolated static let subscriptionID = "cleanup-library-v2-macos"
     var onRemoteLibrary: ((CleanupLibrary) -> Void)?
 
     private let store: any CleanupLibraryCloudStoring

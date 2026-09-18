@@ -22,7 +22,7 @@ final class LocalizationTests: XCTestCase {
     }
 
     func testAboutVersionUsesLocalizedFormat() throws {
-        let data = try XCTUnwrap(EntrevoixLocalization.sourceCatalogData())
+        let data = try sourceCatalogData()
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let strings = try XCTUnwrap(object["strings"] as? [String: Any])
         let entry = try XCTUnwrap(strings["settings.version"] as? [String: Any])
@@ -41,7 +41,7 @@ final class LocalizationTests: XCTestCase {
     }
 
     func testOnboardingPrivacyUsesTruthfulRetentionCopy() throws {
-        let data = try XCTUnwrap(EntrevoixLocalization.sourceCatalogData())
+        let data = try sourceCatalogData()
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let strings = try XCTUnwrap(object["strings"] as? [String: Any])
         let entry = try XCTUnwrap(strings["onboarding.welcome.privacy"] as? [String: Any])
@@ -66,7 +66,7 @@ final class LocalizationTests: XCTestCase {
     }
 
     func testCatalogContainsEnglishAndFrenchRepresentativeEntries() throws {
-        let data = try XCTUnwrap(EntrevoixLocalization.sourceCatalogData())
+        let data = try sourceCatalogData()
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let strings = try XCTUnwrap(object["strings"] as? [String: Any])
 
@@ -252,7 +252,7 @@ final class LocalizationTests: XCTestCase {
     }
 
     func testEveryLocalizationKeyUsedBySourceHasEnglishAndFrenchValues() throws {
-        let data = try XCTUnwrap(EntrevoixLocalization.sourceCatalogData())
+        let data = try sourceCatalogData()
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let strings = try XCTUnwrap(object["strings"] as? [String: Any])
         let repositoryURL = URL(fileURLWithPath: #filePath)
@@ -317,5 +317,15 @@ final class LocalizationTests: XCTestCase {
         let localization = try XCTUnwrap(localizations[locale] as? [String: Any])
         let stringUnit = try XCTUnwrap(localization["stringUnit"] as? [String: Any])
         return try XCTUnwrap(stringUnit["value"] as? String)
+    }
+
+    private func sourceCatalogData() throws -> Data {
+        let repositoryURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let catalogURL = repositoryURL.appendingPathComponent("Sources/Entrevoix/Resources/Localizable.xcstrings")
+        return try Data(contentsOf: catalogURL)
     }
 }

@@ -33,7 +33,7 @@ struct EntrevoixApp: App {
     var body: some Scene {
         MenuBarExtra {
             if case .ready(let environment, let recoveredPreferences) = launchState {
-                let model = environment.appStore
+                let model = environment.sceneRoot.appStore
                 MenuContent(
                     model: model,
                     openUserFacingWindow: openUserFacingWindow
@@ -86,7 +86,7 @@ struct EntrevoixApp: App {
             EntrevoixLocalization.text("window.settings", defaultValue: "Entrevoix Settings", locale: interfaceLocale),
             id: "settings"
         ) {
-            if let model = readyModel {
+            if let model = readySceneRoot?.appStore {
                 SettingsView(model: model)
                     .environment(\.locale, model.interfaceLocale)
                     .environment(model)
@@ -105,7 +105,7 @@ struct EntrevoixApp: App {
             EntrevoixLocalization.text("window.logs", defaultValue: "Entrevoix Logs", locale: interfaceLocale),
             id: "logs"
         ) {
-            if let model = readyModel {
+            if let model = readySceneRoot?.appStore {
                 LogsView(logStore: model.logStore)
                     .environment(\.locale, model.interfaceLocale)
                     .background(DockPresenceWindowFocus(sceneID: "logs", controller: dockPresenceController))
@@ -117,7 +117,7 @@ struct EntrevoixApp: App {
             EntrevoixLocalization.text("window.onboarding", defaultValue: "Welcome to Entrevoix", locale: interfaceLocale),
             id: "onboarding"
         ) {
-            if let model = readyModel {
+            if let model = readySceneRoot?.appStore {
                 OnboardingView(model: model)
                     .environment(\.locale, model.interfaceLocale)
                     .environment(model)
@@ -142,8 +142,12 @@ struct EntrevoixApp: App {
     }
 
     private var readyModel: AppStore? {
+        readySceneRoot?.appStore
+    }
+
+    private var readySceneRoot: AppSceneRoot? {
         guard case .ready(let environment, _) = launchState else { return nil }
-        return environment.appStore
+        return environment.sceneRoot
     }
 
     private var interfaceLocale: Locale {

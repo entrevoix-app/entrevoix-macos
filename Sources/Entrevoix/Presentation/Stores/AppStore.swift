@@ -13,8 +13,7 @@ final class AppStore {
     let providerStore: ProviderStore
     let permissionsModel: PermissionsStore
     let promptLibrary: PromptLibraryStore
-    private let cleanupLibraryCloudSync: CleanupLibraryCloudSync
-    private let dictationDictionaryCloudSync: DictationDictionaryCloudSync
+    private let cloudSyncLifecycle: CloudSyncLifecycleStore
     let updates: UpdateStore
     private let launchAtLoginService: any LaunchAtLoginControlling
     private let recordingsFolderOpener: any RecordingsFolderOpening
@@ -208,7 +207,7 @@ final class AppStore {
               !preferences.dictationDictionary.contains(term) else { return false }
         preferences.dictationDictionary.append(term)
         savePreferences()
-        dictationDictionaryCloudSync.publish(preferences.dictationDictionary)
+        cloudSyncLifecycle.publishDictationDictionary()
         return true
     }
 
@@ -216,7 +215,7 @@ final class AppStore {
         guard let index = preferences.dictationDictionary.firstIndex(of: term) else { return }
         preferences.dictationDictionary.remove(at: index)
         savePreferences()
-        dictationDictionaryCloudSync.publish(preferences.dictationDictionary)
+        cloudSyncLifecycle.publishDictationDictionary()
     }
 
     @discardableResult
@@ -226,123 +225,40 @@ final class AppStore {
               updatedTerm == term || !preferences.dictationDictionary.contains(updatedTerm) else { return false }
         preferences.dictationDictionary[index] = updatedTerm
         savePreferences()
-        dictationDictionaryCloudSync.publish(preferences.dictationDictionary)
+        cloudSyncLifecycle.publishDictationDictionary()
         return true
     }
 
     var cleanupPromptForDisplay: String { activeCleanupPrompt?.instructions ?? "" }
 
     init(
-        dependencies: AppStoreDependencies,
-        initialPreferences: AppPreferences,
-        initialPreferencesAreFresh: Bool = false
+        dictationSession: DictationStore,
+        connectionTestStore: ConnectionTestStore,
+        audioInput: AudioInputStore,
+        preferencesModel: PreferencesStore,
+        recordingRetention: RecordingRetentionStore,
+        providerStore: ProviderStore,
+        permissionsModel: PermissionsStore,
+        promptLibrary: PromptLibraryStore,
+        cloudSyncLifecycle: CloudSyncLifecycleStore,
+        updates: UpdateStore,
+        launchAtLoginService: any LaunchAtLoginControlling,
+        recordingsFolderOpener: any RecordingsFolderOpening,
+        logStore: AppLogStore
     ) {
-        logStore = dependencies.logStore
-        let preferencesModel = PreferencesStore(
-            preferencesStore: dependencies.preferencesStore,
-            keychain: dependencies.keychain,
-            initialPreferences: initialPreferences
-        )
-        self.preferencesModel = preferencesModel
-        recordingRetention = dependencies.recordingRetention
-        recordingsFolderOpener = dependencies.recordingsFolderOpener
-        self.audioInput = AudioInputStore(
-            preferencesStore: preferencesModel,
-            deviceCatalog: dependencies.audioInputDevices
-        )
-        self.updates = UpdateStore(preferencesModel: preferencesModel, updater: dependencies.updater)
-        let providerStore = ProviderStore(
-            preferencesStore: preferencesModel,
-            modelCatalog: dependencies.modelCatalog,
-            codexCredentialsStore: dependencies.codexCredentials,
-            codexAuthenticator: dependencies.codexAuthenticator,
-            audioCaptureTrimmingResources: dependencies.audioCaptureTrimmingResources,
-            logStore: dependencies.logStore,
-            initialPreferencesAreFresh: initialPreferencesAreFresh
-        )
-        self.providerStore = providerStore
-        let permissionsModel = PermissionsStore(provider: dependencies.permissions)
-        self.permissionsModel = permissionsModel
-        let cleanupLibraryCloudSync = dependencies.cleanupLibraryCloudSync
-        self.cleanupLibraryCloudSync = cleanupLibraryCloudSync
-        let dictationDictionaryCloudSync = dependencies.dictationDictionaryCloudSync
-        self.dictationDictionaryCloudSync = dictationDictionaryCloudSync
-        let promptLibrary = PromptLibraryStore(
-            preferencesModel: preferencesModel,
-            exportReader: dependencies.cleanupPromptExportReader,
-            libraryDidChange: { [weak cleanupLibraryCloudSync, weak preferencesModel] in
-                guard let cleanupLibraryCloudSync, let preferencesModel else { return }
-                cleanupLibraryCloudSync.publish(preferencesModel.preferences)
-            }
-        )
-        self.promptLibrary = promptLibrary
-        dependencies.listeningIndicator.configureSelectors(
-            promptLibrary: promptLibrary,
-            audioInput: audioInput,
-            interfaceLocale: { [weak preferencesModel] in
-                guard let preferencesModel else { return .current }
-                return EntrevoixLocalization.locale(for: preferencesModel.preferences.interfaceLanguage)
-            }
-        )
-        cleanupLibraryCloudSync.onRemoteLibrary = { [weak preferencesModel] library in
-            guard let preferencesModel else { return }
-            var preferences = preferencesModel.preferences
-            preferences.cleanupPrompts = library.prompts
-            preferences.cleanupWorkflows = library.workflows
-            preferences.normalizeCleanupSelection()
-            if case .prompt(let id) = preferences.activeCleanupSelection,
-               let prompt = preferences.cleanupPrompts.first(where: { $0.id == id }) {
-                preferences.cleanupPrompt = prompt.instructions
-                preferences.cleanupPromptMode = .custom
-            }
-            preferencesModel.update(preferences, to: .immediate)
-        }
-        cleanupLibraryCloudSync.start(
-            with: CleanupLibrary(
-                prompts: initialPreferences.cleanupPrompts,
-                workflows: initialPreferences.cleanupWorkflows
-            ),
-            seedLocalLibrary: promptLibrary.differsFromDefault
-        )
-        dictationDictionaryCloudSync.onRemoteTerms = { [weak preferencesModel] terms in
-            guard let preferencesModel else { return }
-            var preferences = preferencesModel.preferences
-            preferences.dictationDictionary = AppPreferences.normalizedDictationDictionary(terms)
-            preferencesModel.update(preferences, to: .immediate)
-        }
-        dictationDictionaryCloudSync.start(
-            with: initialPreferences.dictationDictionary,
-            seedLocalTerms: !initialPreferences.dictationDictionary.isEmpty
-        )
-        let connectionTestStore = ConnectionTestStore(
-            coordinator: dependencies.connectionTest,
-            providerStore: providerStore,
-            permissionsStore: permissionsModel,
-            feedback: dependencies.feedback,
-            textDelivery: dependencies.textDelivery
-        )
-        self.connectionTestStore = connectionTestStore
-        let dictationSession = DictationStore(
-            coordinator: dependencies.coordinator,
-            providerStore: providerStore,
-            permissionsStore: permissionsModel,
-            promptLibrary: promptLibrary,
-            hotkeys: dependencies.hotkeys,
-            textDelivery: dependencies.textDelivery,
-            soundFeedback: dependencies.feedback,
-            listeningIndicator: dependencies.listeningIndicator,
-            providerAlerts: dependencies.providerAlerts,
-            logStore: dependencies.logStore,
-            now: dependencies.now
-        )
         self.dictationSession = dictationSession
-        dictationSession.canStart = { [weak connectionTestStore] in
-            connectionTestStore?.state.isInactive ?? false
-        }
-        connectionTestStore.canStart = { [weak dictationSession] in
-            dictationSession?.state == .idle
-        }
-        launchAtLoginService = dependencies.launchAtLogin
+        self.connectionTestStore = connectionTestStore
+        self.audioInput = audioInput
+        self.preferencesModel = preferencesModel
+        self.recordingRetention = recordingRetention
+        self.providerStore = providerStore
+        self.permissionsModel = permissionsModel
+        self.promptLibrary = promptLibrary
+        self.cloudSyncLifecycle = cloudSyncLifecycle
+        self.updates = updates
+        self.launchAtLoginService = launchAtLoginService
+        self.recordingsFolderOpener = recordingsFolderOpener
+        self.logStore = logStore
     }
 
     func savePreferences() {
@@ -455,11 +371,11 @@ final class AppStore {
     func resetCleanupPrompt() { resetPromptLibrary() }
 
     func refreshCleanupLibrary() {
-        cleanupLibraryCloudSync.refresh()
+        cloudSyncLifecycle.refreshCleanupLibrary()
     }
 
     func refreshDictationDictionary() {
-        dictationDictionaryCloudSync.refresh()
+        cloudSyncLifecycle.refreshDictationDictionary()
     }
 
     var state: DictationState { dictationSession.state }
