@@ -28,12 +28,39 @@ struct DictationShortcutPressState {
     }
 }
 
+struct EscapeHotkeyRegistrationState {
+    private(set) var callbackIsAvailable = false
+    private(set) var isInstalled = false
+    private(set) var isEnabled = false
+
+    mutating func setCallbackAvailable(_ isAvailable: Bool) -> Bool? {
+        guard callbackIsAvailable != isAvailable else { return nil }
+        callbackIsAvailable = isAvailable
+        guard isInstalled else { return nil }
+        isEnabled = isAvailable
+        return isAvailable
+    }
+
+    mutating func install() -> Bool? {
+        guard !isInstalled else { return nil }
+        isInstalled = true
+        isEnabled = callbackIsAvailable
+        return isEnabled
+    }
+}
+
 @MainActor
 final class HotkeyService: HotkeyHandling {
     var onKeyDown: (() -> Void)?
     var onKeyUp: (() -> Void)?
-    var onEscape: (() -> Void)?
-    private var isInstalled = false
+    var onEscape: (() -> Void)? {
+        didSet {
+            updateEscapeRegistration(
+                escapeRegistration.setCallbackAvailable(onEscape != nil)
+            )
+        }
+    }
+    private var escapeRegistration = EscapeHotkeyRegistrationState()
     private var dictationShortcutPressState = DictationShortcutPressState()
 
     init() {
@@ -47,8 +74,7 @@ final class HotkeyService: HotkeyHandling {
     }
 
     private func install() {
-        guard !isInstalled else { return }
-        isInstalled = true
+        guard !escapeRegistration.isInstalled else { return }
 
         // KeyboardShortcuts invokes these handlers synchronously from Carbon's
         // main event dispatcher. Keep them synchronous: scheduling a main-actor
@@ -70,6 +96,16 @@ final class HotkeyService: HotkeyHandling {
         }
         KeyboardShortcuts.onKeyDown(for: .cancel) { [weak self] in
             self?.onEscape?()
+        }
+        updateEscapeRegistration(escapeRegistration.install())
+    }
+
+    private func updateEscapeRegistration(_ isEnabled: Bool?) {
+        guard let isEnabled else { return }
+        if isEnabled {
+            KeyboardShortcuts.enable(.cancel)
+        } else {
+            KeyboardShortcuts.disable(.cancel)
         }
     }
 

@@ -27,6 +27,8 @@ public protocol PermissionProviding: MicrophonePermissionRequesting, MicrophoneP
 public protocol HotkeyHandling: AnyObject {
     var onKeyDown: (() -> Void)? { get set }
     var onKeyUp: (() -> Void)? { get set }
+    /// Set only while Escape should be captured. A nil handler leaves Escape
+    /// unregistered so the frontmost application receives it normally.
     var onEscape: (() -> Void)? { get set }
 }
 

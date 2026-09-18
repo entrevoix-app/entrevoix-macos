@@ -49,13 +49,14 @@ final class DictationStore {
         snapshot = coordinator.snapshot
         coordinator.onSnapshot = { [weak self] snapshot in
             self?.snapshot = snapshot
+            self?.synchronizeEscapeHandler()
         }
         coordinator.onEvent = { [weak self] event in
             self?.handle(event)
         }
         hotkeys.onKeyDown = { [weak self] in self?.handleKeyDown() }
         hotkeys.onKeyUp = { [weak self] in self?.handleKeyUp() }
-        hotkeys.onEscape = { [weak self] in self?.handleEscape() }
+        synchronizeEscapeHandler()
     }
 
     var state: DictationState { snapshot.state }
@@ -165,6 +166,15 @@ final class DictationStore {
     private var isErrorState: Bool {
         if case .error = state { return true }
         return false
+    }
+
+    private func synchronizeEscapeHandler() {
+        switch state {
+        case .requestingPermission, .recording, .transcribing:
+            hotkeys.onEscape = { [weak self] in self?.handleEscape() }
+        case .idle, .error:
+            hotkeys.onEscape = nil
+        }
     }
 
     private func automaticInsertionIsAvailable() -> Bool {

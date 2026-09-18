@@ -472,33 +472,39 @@ final class ListeningIndicatorTests: XCTestCase {
             audioInput: audioInput,
             interfaceLocale: { .current }
         )
+        let existingPanelIDs = Set(NSApplication.shared.windows.compactMap { window in
+            (window as? ListeningIndicatorPanel).map(ObjectIdentifier.init)
+        })
         controller.show(label: "Listening…", phase: .listening)
         await waitUntilPollingIsSuspended(sleeper)
-        let panel = try XCTUnwrap(indicatorPanel())
+        defer {
+            controller.hide()
+            sleeper.resume()
+        }
+        let initialSuspensionCount = sleeper.suspensionCount
+        let panel = try XCTUnwrap(indicatorPanel(excluding: existingPanelIDs))
         let originBeforeTracking = panel.frame.origin
         let menu = try XCTUnwrap(hostedPopup(kind: .prompt, in: panel.contentView!)?.menu)
 
         NotificationCenter.default.post(name: NSMenu.didBeginTrackingNotification, object: menu)
         sleeper.resume()
-        await Task.yield()
+        await waitUntilPollingIsSuspended(sleeper, after: initialSuspensionCount)
 
         XCTAssertEqual(provider.callCount, 1)
         XCTAssertEqual(panel.frame.origin, originBeforeTracking)
 
         NotificationCenter.default.post(name: NSMenu.didEndTrackingNotification, object: menu)
-        await waitUntilPollingIsSuspended(sleeper)
         sleeper.resume()
-        await waitUntilPollingIsSuspended(sleeper)
+        await waitUntilPollingIsSuspended(sleeper, after: initialSuspensionCount + 1)
 
         XCTAssertEqual(provider.callCount, 2)
         XCTAssertEqual(panel.frame.origin, originBeforeTracking)
 
         sleeper.resume()
-        await waitUntilPollingIsSuspended(sleeper)
+        await waitUntilPollingIsSuspended(sleeper, after: initialSuspensionCount + 2)
 
         XCTAssertEqual(provider.callCount, 3)
         XCTAssertNotEqual(panel.frame.origin, originBeforeTracking)
-        controller.hide()
     }
 
     @MainActor
@@ -708,11 +714,12 @@ final class ListeningIndicatorTests: XCTestCase {
     @MainActor
     private func waitUntilPollingIsSuspended(
         _ sleeper: ControlledIndicatorSleep,
+        after suspensionCount: Int = 0,
         file: StaticString = #filePath,
         line: UInt = #line
     ) async {
         for _ in 0 ..< 100 {
-            if sleeper.isSuspended { return }
+            if sleeper.isSuspended, sleeper.suspensionCount > suspensionCount { return }
             await Task.yield()
         }
         XCTFail("Timed out waiting for the position polling task.", file: file, line: line)
@@ -850,8 +857,10 @@ final class ListeningIndicatorTests: XCTestCase {
     }
 
     @MainActor
-    private func indicatorPanel() -> ListeningIndicatorPanel? {
-        NSApp.windows.compactMap { $0 as? ListeningIndicatorPanel }.last
+    private func indicatorPanel(excluding existingPanelIDs: Set<ObjectIdentifier>) -> ListeningIndicatorPanel? {
+        NSApp.windows.compactMap { $0 as? ListeningIndicatorPanel }.first {
+            !existingPanelIDs.contains(ObjectIdentifier($0))
+        }
     }
 
     private func directCaretAnchor() -> ListeningIndicatorAnchor {
@@ -917,12 +926,14 @@ private final class IndicatorAudioLevelSpy: AudioLevelProviding {
 @MainActor
 private final class ControlledIndicatorSleep {
     private var continuation: CheckedContinuation<Void, Never>?
+    private(set) var suspensionCount = 0
 
     var isSuspended: Bool { continuation != nil }
 
     func sleep(for duration: Duration) async throws {
         await withCheckedContinuation { continuation in
             self.continuation = continuation
+            suspensionCount += 1
         }
     }
 
