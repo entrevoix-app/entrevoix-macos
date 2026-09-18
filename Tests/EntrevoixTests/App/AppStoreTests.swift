@@ -5,6 +5,34 @@ import XCTest
 
 final class AppStoreTests: XCTestCase {
     @MainActor
+    func testInitializerAcceptsOnlyRequiredStoresAndActions() {
+        let context = makeContext()
+        let lifecycle = CloudSyncLifecycleStore(
+            preferencesModel: context.model.preferencesModel,
+            cleanupLibraryCloudSync: CleanupLibraryCloudSync(store: CleanupLibraryCloudStoreSpy(remoteLibrary: nil)),
+            dictationDictionaryCloudSync: DictationDictionaryCloudSync(store: DictationDictionaryCloudStoreSpy(remoteTerms: nil))
+        )
+
+        let store = AppStore(
+            dictationSession: context.model.dictationSession,
+            connectionTestStore: context.model.connectionTestStore,
+            audioInput: context.model.audioInput,
+            preferencesModel: context.model.preferencesModel,
+            recordingRetention: context.model.recordingRetention,
+            providerStore: context.model.providerStore,
+            permissionsModel: context.model.permissionsModel,
+            promptLibrary: context.model.promptLibrary,
+            cloudSyncLifecycle: lifecycle,
+            updates: context.model.updates,
+            launchAtLoginService: context.launch,
+            recordingsFolderOpener: RecordingsFolderOpenerSpy(),
+            logStore: context.model.logStore
+        )
+
+        XCTAssertTrue(store.preferencesModel === context.model.preferencesModel)
+    }
+
+    @MainActor
     func testLoadsAndSavesPreferencesAndSecretsIndependently() {
         var preferences = AppPreferences()
         preferences.sttLanguage = .french
@@ -435,7 +463,12 @@ final class AppStoreTests: XCTestCase {
 
     @MainActor
     func testPromptLibraryCRUDValidationAndReset() {
-        let preferences = AppPreferences(interfaceLanguage: .french)
+        let preferences = PreferencesMigrator.migrate(
+            AppPreferences(interfaceLanguage: .french),
+            localizedDefaultPrompt: EntrevoixLocalization.defaultCleanupPrompt(
+                locale: EntrevoixLocalization.locale(for: .french)
+            )
+        )
         let context = makeContext(preferences: preferences)
         XCTAssertEqual(context.model.activeCleanupPrompt?.instructions, EntrevoixLocalization.defaultCleanupPrompt(locale: context.model.interfaceLocale))
 
@@ -652,7 +685,7 @@ final class AppStoreTests: XCTestCase {
     func testToggleStartsAndStopsRecording() async throws {
         let recorder = AppRecorderSpy()
         recorder.stopURL = try appTemporaryFile()
-        var preferences = AppPreferences()
+        var preferences = AppPreferences(interfaceLanguage: .english)
         preferences.triggerMode = .toggle
         let context = makeContext(recorder: recorder, preferences: preferences)
 
@@ -1306,7 +1339,7 @@ final class AppStoreTests: XCTestCase {
     }
 
     @MainActor
-    private func makeContext(
+    func makeContext(
         recorder: any AudioRecording = AppRecorderSpy(),
         transcriber: any SpeechTranscribing = AppTranscriberSpy(),
         cleaner: any TextCleaning = AppCleanerStub(),
@@ -1355,7 +1388,7 @@ final class AppStoreTests: XCTestCase {
             now: { clock.value },
             sessionArbiter: nil
         )
-        let model = AppStore(dependencies: AppStoreDependencies(
+        let model = AppStoreFactory.make(dependencies: AppStoreDependencies(
             coordinator: coordinator,
             connectionTest: connectionTest,
             textDelivery: delivery,
@@ -1510,7 +1543,7 @@ private enum RecordingsFolderOpenFailure: Error {
 }
 
 @MainActor
-private struct AppContext {
+struct AppContext {
     let model: AppStore
     let delivery: AppDeliverySpy
     let preferencesStore: PreferencesStoreSpy

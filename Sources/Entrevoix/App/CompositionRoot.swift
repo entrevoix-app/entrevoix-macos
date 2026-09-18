@@ -123,7 +123,7 @@ enum CompositionRoot {
             sessionArbiter: sessionArbiter
         )
 
-        let appStore = AppStore(dependencies: AppStoreDependencies(
+        let appStore = AppStoreFactory.make(dependencies: AppStoreDependencies(
             coordinator: coordinator,
             connectionTest: connectionTest,
             textDelivery: textDelivery,

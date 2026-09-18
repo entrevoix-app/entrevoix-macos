@@ -13,7 +13,7 @@ protocol DictationDictionaryCloudStoring {
 
 @MainActor
 final class DictationDictionaryCloudSync {
-    static let subscriptionID = "dictation-dictionary-v1-macos"
+    nonisolated static let subscriptionID = "dictation-dictionary-v1-macos"
     var onRemoteTerms: (([String]) -> Void)?
 
     private let store: any DictationDictionaryCloudStoring

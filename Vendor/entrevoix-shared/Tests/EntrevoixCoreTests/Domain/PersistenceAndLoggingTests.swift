@@ -61,7 +61,7 @@ final class PersistenceAndLoggingTests: XCTestCase {
         XCTAssertEqual(preferences.dictationDictionary, ["Symfony", "CapRover"])
         XCTAssertEqual(preferences.dictationDictionaryPrompt, "Symfony, CapRover")
         XCTAssertTrue(preferences.trimLeadingAndTrailingSilence)
-        XCTAssertFalse(preferences.reduceLongInternalPauses)
+        XCTAssertTrue(preferences.reduceLongInternalPauses)
 
         preferences.sttLanguage = .french
         let microphone = AudioInputDeviceReference(uid: "usb-microphone", name: "USB Microphone")
