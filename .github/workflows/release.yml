@@ -4,17 +4,19 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Semantic version without the v prefix (for example, 0.1.0)
+        description: Semantic version without the v prefix (for example, 0.4.0-dev.1)
         required: true
+        default: 0.4.0-dev.1
         type: string
       build_number:
         description: Monotonic Sparkle build number
         required: true
+        default: "9"
         type: string
       channel:
         description: Sparkle update channel
         required: true
-        default: stable
+        default: dev
         type: choice
         options:
           - stable
