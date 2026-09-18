@@ -35,7 +35,7 @@ public struct AppleFoundationCleanupService: TextCleaning {
         let input = CleanupTransformationPolicy.input(instructions: request.prompt, transcript: text)
         let model = SystemLanguageModel(useCase: .general, guardrails: .permissiveContentTransformations)
         let session = LanguageModelSession(model: model, instructions: instructions)
-        #if compiler(>=6.3)
+        #if compiler(>=6.4)
         let options = GenerationOptions(samplingMode: .greedy)
         #else
         let options = GenerationOptions(sampling: .greedy)
